@@ -24,7 +24,7 @@ io.on('connection', (client) => {
     client.on('join', async (data) => {
         room = data;
         client.join(room);
-        // Khi join, truy vấn lịch sử chat của room từ DB
+        // Khi join, truy vấn lịch sử chat của room từ DB (sắp xếp theo createdAt)
         try {
             const history = await Message.find({ room: data }).sort({ createdAt: 1 });
             client.emit("history", JSON.stringify(history));

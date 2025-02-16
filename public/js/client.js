@@ -16,6 +16,27 @@ const emotions = [
     { id: 5, emotion: `<i class="fa-solid fa-face-angry"></i>` }
 ];
 
+// Hàm displayReaction: hiển thị reaction lên tin nhắn theo reaction.messageId
+function displayReaction(reaction) {
+    const span_message = document.getElementById(reaction.messageId);
+    if (!span_message) {
+        console.error("Không tìm thấy phần tử với messageId:", reaction.messageId);
+        return;
+    }
+    span_message.style.position = "relative";
+    let emotionHTML = emotions[reaction.emotion - 1].emotion;
+    const div = document.createElement("div");
+    div.innerHTML = emotionHTML;
+    let emotionElem = div.firstChild;
+    emotionElem.style.position = "absolute";
+    emotionElem.style.bottom = "-7px";
+    emotionElem.style.right = "4px";
+    emotionElem.style.backgroundColor = "blue";
+    emotionElem.style.borderRadius = "10px";
+    emotionElem.style.padding = "3px";
+    span_message.appendChild(emotionElem);
+}
+
 socket.on("connect", () => {
     console.log("Connected to socket.io server");
     if (currentRoom) {
@@ -23,7 +44,7 @@ socket.on("connect", () => {
     }
 });
 
-// Khi nhận sự kiện "history", hiển thị tin nhắn
+// Khi nhận "history", hiển thị tin nhắn từ DB
 socket.on("history", (data) => {
     const history = JSON.parse(data);
     console.log("Received chat history for room:", currentRoom, history);
@@ -34,7 +55,7 @@ socket.on("history", (data) => {
     localStorage.setItem("chat_" + currentRoom, JSON.stringify(history));
 });
 
-// Khi nhận sự kiện "reactionHistory", hiển thị tất cả reaction từ DB
+// Khi nhận "reactionHistory", hiển thị các reaction đã lưu từ DB
 socket.on("reactionHistory", (data) => {
     const reactions = JSON.parse(data);
     console.log("Received reaction history for room:", currentRoom, reactions);
@@ -235,12 +256,12 @@ function choose(e, id, id_emotion) {
     emotionElem.style.padding = "3px";
     span_message.appendChild(emotionElem);
 
-    // Tạo đối tượng reaction cần gửi với trường messageId và room
+    // Tạo đối tượng reaction với trường messageId và room
     const reactionData = {
-        messageId: id,          // Sử dụng id của tin nhắn làm messageId
-        user: myname,           // Tên người gửi reaction
-        emotion: id_emotion,    // Loại emotion (1-5)
-        room: currentRoom       // Gửi room để lưu vào DB
+        messageId: id,         // Sử dụng id của tin nhắn làm messageId
+        user: myname,          // Tên người gửi reaction
+        emotion: id_emotion,   // Loại emotion (1-5)
+        room: currentRoom      // Room hiện hành
     };
     socket.emit("emotion", JSON.stringify(reactionData));
 }
