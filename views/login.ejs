@@ -1,0 +1,114 @@
+<div  >
+
+    <caption>
+        <h1>Login </h1>
+    </caption>
+    <input type="text" name="username" id="ip_username" placeholder="Username" required>
+    <input type="password" name="password" id="ip_password" placeholder="Password" required>
+    <button id="btn_login">Dang Nhap</button>  
+
+</div>
+
+<div>
+
+    <caption>
+        <h1>Dang ky </h1>
+    </caption>
+    <input type="text" name="username2" id="ip_username2" placeholder="Username" required>
+    <input type="password" name="password2" id="ip_password2" placeholder="Password" required>
+    <input type="password" name="password22" id="ip_password22" placeholder="nhap lai Password" required>
+    <input type="text" name="username2" id="ip_fullname" placeholder="Nhap ho va ten" required>
+
+    <button id="btn_register">Dang Nhap</button>
+
+</div>
+<script >
+
+    //dang nhap
+    const btn_login = document.getElementById("btn_login");
+    const ip_username = document.getElementById("ip_username");
+    const ip_password = document.getElementById("ip_password");
+
+    btn_login.addEventListener("click",()=>{
+        const username = ip_username.value;
+        const password = ip_password.value;
+        const data = {
+            username: username,
+            password: password
+        }
+        
+        fetch('/api/accounts/login',{
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+
+            },
+            body: JSON.stringify(data) 
+        })
+        .then(res=>res.json())
+        .then(result=>{
+            // alert(JSON.stringify(result))
+            if(result.statusCode){
+                alert(result.message)
+            }else{
+                localStorage.setItem('username',result.username)
+                
+
+                window.location = "/chat"
+            }
+        })
+        .catch(error =>{
+            alert("Co loi xay ra" + error.message)
+        })
+    })
+</script>
+
+<script>
+    //dang ky
+    const btn_register = document.getElementById("btn_register");
+    const ip_username2 = document.getElementById("ip_username2");
+    const ip_password2 = document.getElementById("ip_password2");
+    const ip_password22 = document.getElementById("ip_password22");
+    const ip_fullname = document.getElementById("ip_fullname");
+
+    btn_register.addEventListener('click',()=>{
+        const username = ip_username2.value;
+        const password = ip_password2.value;
+        const password2 = ip_password22.value;
+        const fullname = ip_fullname.value;
+
+        if(password != password2){
+            alert("Password khong trung nhau")
+            return;
+        }
+
+        const data = {
+            username: username,
+            password: password,
+            fullname: fullname
+        }
+
+        fetch('/api/accounts/register', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+
+            },
+            body: JSON.stringify(data)
+        })
+            .then(res => res.json())
+            .then(result => {
+                // alert(JSON.stringify(result))
+                if (result.statusCode) {
+                    alert(result.message)
+                } else {
+                    alert("Dang ky thanh cong ,Hay dang nhap")
+                }
+            })
+            .catch(error => {
+                alert("Co loi xay ra" + error.message)
+            })
+    })
+</script>

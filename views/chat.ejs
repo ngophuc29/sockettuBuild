@@ -1,0 +1,47 @@
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+<div style="display: flex;">
+    <div class="user_panel" style="width: 25%; padding: 10px;">
+        <div class="user_search">
+            <input type="text" id="search_user" placeholder="Search user by name">
+        </div>
+        <ul class="list_user">
+            <% accounts.forEach((account)=> { %>
+                <li style="cursor: pointer;">
+                    <div style="display: flex;">
+                        <span>UserName: </span>
+                        <p>
+                            <%= account.username %>
+                        </p>
+                    </div>
+                    <div style="display: flex;">
+                        <span>FullName: </span>
+                        <p>
+                            <%= account.fullname %>
+                        </p>
+                    </div>
+                </li>
+                <% }); %>
+        </ul>
+    </div>
+
+    <div class="chat_list"
+        style="width: 25%; padding: 10px; border-left: 1px solid #ccc; border-right: 1px solid #ccc;">
+        <h3>Chats</h3>
+        <ul id="chat_list_ul"></ul>
+    </div>
+
+    <div class="container" style="width: 50%; padding: 10px;">
+        <ul id="ul_message"></ul>
+        <div class="container_send">
+            <input type="text" id="message" placeholder="Enter your message">
+            <button id="btn_send">Gửi</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const myUsername = localStorage.getItem('username');
+</script>
+<script src="/socket.io/socket.io.js"></script>
+<script src="js/client.js"></script>

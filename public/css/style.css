@@ -1,0 +1,133 @@
+body,
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: antiquewhite;
+}
+
+.container {
+    width: 400px;
+    height: 90vh;
+    background-color: azure;
+    margin: 5px auto;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+
+.container_join {
+    width: 100%;
+    display: flex;
+    height: 5%;
+}
+
+#name {
+    width: 40%;
+    padding: 10px;
+}
+
+#room {
+    width: 80%;
+    padding: 10px;
+}
+
+#btn_join {
+    width: 20%;
+    padding: 10px;
+}
+
+#ul_message {
+    list-style: none;
+    width: 100%;
+    height: 90%;
+    overflow: scroll;
+}
+#ul_message li{
+    display: flex;
+    margin-top: 5px;
+    align-items: center;
+}
+#ul_message li span p{
+    background-image:linear-gradient(rgb(204, 94, 94),rgb(160, 212, 212)) ;
+    padding: 5px;
+    color: white;
+    width: fit-content;
+    border-radius: 8px;
+    float: left;
+    clear: both;
+}
+.choose_emotion{
+    margin-left: 5px;
+    display: none !important; ;
+    position: relative;
+}
+.emotion{
+    background-color: #1f8300;
+    padding: 5px;
+    border-radius: 20px;
+    position: absolute;
+    display: flex;
+    top: 20px;
+     
+}
+.emotion i {
+    margin: 5px;
+    transition: all 0.3s linear;
+}
+.emotion i:hover{
+    cursor: pointer;
+    transform: scale(1.2);
+}
+#ul_message li:hover .choose_emotion{
+   display: block !important;
+}
+.right{
+    /* float: right !important; */
+    flex-direction: row-reverse;
+    
+}
+.right .choose_emotion .emotion{
+    /* float: right !important; */
+    right: 10px;
+
+}
+.container_send {
+    width: 100%;
+    display: flex;
+    height: 5%;
+}
+
+#message {
+    width: 80%;
+    padding: 10px;
+}
+
+#btn_send {
+    width: 20%;
+    padding: 10px;
+}
+
+.list_user{
+    list-style: none;
+    width: 30%;
+    padding: 20px;
+    background-color: rgb(204, 94, 94);
+    overflow-y: scroll;
+    height: 90vh;
+    box-sizing: border-box;
+}
+.list_user li {
+    background-color: cyan;
+    border-radius: 14px;
+    padding: 16px;
+    margin-top: 20px;
+}
+.list_user li div{
+    display: flex;
+    
+}
