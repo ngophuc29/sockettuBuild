@@ -93,12 +93,10 @@ body {
 }
 
 .right {
-    /* float: right !important; */
     flex-direction: row-reverse;
 }
 
 .right .choose_emotion .emotion {
-    /* float: right !important; */
     right: 10px;
 }
 

@@ -92,7 +92,7 @@ io.on('connection', (client) => {
                 client.emit('addFriendResult', { success: false, message: "User không tồn tại" });
                 return;
             }
-            // Kiểm tra nếu đã là bạn bè thì không cho gửi lời mời nữa
+            // Nếu đã là bạn bè thì không cho gửi lời mời nữa
             if (user.friends.includes(friendUsername)) {
                 client.emit('addFriendResult', { success: false, message: "Hai người đã là bạn bè" });
                 return;
@@ -104,12 +104,25 @@ io.on('connection', (client) => {
                 return;
             }
             // Tạo lời mời kết bạn mới
-            const newRequest = await FriendRequest.create({ from: myUsername, to: friendUsername });
+            await FriendRequest.create({ from: myUsername, to: friendUsername });
             client.emit('addFriendResult', { success: true, message: `Gửi lời mời kết bạn đến ${friendUsername} thành công` });
-            // (Có thể thêm logic thông báo tới người nhận nếu họ đang online)
         } catch (err) {
             console.error("Lỗi kết bạn:", err);
             client.emit('addFriendResult', { success: false, message: "Lỗi server" });
+        }
+    });
+
+    // Xử lý hủy kết bạn
+    client.on('cancelFriend', async (data) => {
+        try {
+            const { myUsername, friendUsername } = data;
+            // Loại bỏ friendUsername khỏi danh sách bạn của myUsername và ngược lại
+            await accountModel.updateOne({ username: myUsername }, { $pull: { friends: friendUsername } });
+            await accountModel.updateOne({ username: friendUsername }, { $pull: { friends: myUsername } });
+            client.emit('cancelFriendResult', { success: true, message: `Hủy kết bạn với ${friendUsername} thành công` });
+        } catch (err) {
+            console.error(err);
+            client.emit('cancelFriendResult', { success: false, message: "Lỗi server" });
         }
     });
 
@@ -167,7 +180,7 @@ io.on('connection', (client) => {
     });
 });
 
-// Vẫn giữ lại API HTTP nếu cần (không ảnh hưởng đến chức năng socket)
+// API HTTP (nếu cần)
 app.post('/add-friend', async (req, res) => {
     const { myUsername, friendUsername } = req.body;
     try {
