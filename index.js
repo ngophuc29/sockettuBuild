@@ -46,15 +46,22 @@ io.on('connection', (client) => {
     });
 
     client.on("message", async (data) => {
-        io.to(room).emit("thread", data);
-        client.broadcast.emit("notification", { room: room, message: data });
+        let messageObj;
         try {
-            let messageObj = JSON.parse(data);
-            await Message.create({
+            messageObj = JSON.parse(data);
+        } catch (err) {
+            console.error("Error parsing message data:", err);
+            return;
+        }
+        try {
+            const newMessage = await Message.create({
                 name: messageObj.name,
                 message: messageObj.message,
                 room: messageObj.room
             });
+            messageObj._id = newMessage._id; // Gán _id của MongoDB cho messageObj
+            io.to(room).emit("thread", JSON.stringify(messageObj));
+            client.broadcast.emit("notification", { room: room, message: JSON.stringify(messageObj) });
         } catch (err) {
             console.error("Error saving message:", err);
         }
@@ -75,6 +82,7 @@ io.on('connection', (client) => {
                 user: reactionObj.user,
                 emotion: reactionObj.emotion
             });
+            console.log("Saved reaction:", reactionObj);
         } catch (err) {
             console.error("Error saving reaction:", err);
         }
