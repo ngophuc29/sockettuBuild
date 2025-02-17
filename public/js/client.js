@@ -1,3 +1,6 @@
+/************************************
+ * PHẦN 1: CHỨC NĂNG CHAT (CODE CŨ)
+ ************************************/
 const inputmessage = document.getElementById("message");
 const btn_send = document.getElementById("btn_send");
 const ul_message = document.getElementById("ul_message");
@@ -16,7 +19,6 @@ const emotions = [
     { id: 5, emotion: `<i class="fa-solid fa-face-angry"></i>` }
 ];
 
-// Hàm displayReaction: hiển thị reaction lên tin nhắn theo reaction.messageId
 function displayReaction(reaction) {
     const span_message = document.getElementById(reaction.messageId);
     if (!span_message) {
@@ -44,7 +46,6 @@ socket.on("connect", () => {
     }
 });
 
-// Khi nhận "history", hiển thị tin nhắn từ DB
 socket.on("history", (data) => {
     const history = JSON.parse(data);
     console.log("Received chat history for room:", currentRoom, history);
@@ -55,7 +56,6 @@ socket.on("history", (data) => {
     localStorage.setItem("chat_" + currentRoom, JSON.stringify(history));
 });
 
-// Khi nhận "reactionHistory", hiển thị các reaction đã lưu từ DB
 socket.on("reactionHistory", (data) => {
     const reactions = JSON.parse(data);
     console.log("Received reaction history for room:", currentRoom, reactions);
@@ -73,7 +73,7 @@ const sendMessage = () => {
     if (message === "") return;
 
     const obj = {
-        id: Date.now(), // tạo id duy nhất
+        id: Date.now(),
         name: myname,
         message: message,
         room: currentRoom
@@ -107,7 +107,6 @@ function appendMessage(obj) {
     ul_message.scrollTop = ul_message.scrollHeight;
 }
 
-// (Tùy chọn) Lưu tin nhắn vào localStorage cho demo cache
 function saveMessage(messageObj) {
     if (!messageObj.room) return;
     const key = "chat_" + messageObj.room;
@@ -190,7 +189,7 @@ function updateChatList() {
 }
 updateChatList();
 
-const listUser = document.querySelectorAll('.list_user li');
+const listUser = document.querySelectorAll('#chat_mode .list_user li');
 listUser.forEach(item => {
     item.addEventListener('click', () => {
         const usernameElement = item.querySelector('p');
@@ -205,7 +204,6 @@ listUser.forEach(item => {
         currentChatPartner = targetUser;
         socket.emit("join", room);
         ul_message.innerHTML = "";
-        // Khi join, server sẽ gửi "history" từ DB
         activeChats[room] = { partner: targetUser, unread: 0 };
         localStorage.setItem("activeChats", JSON.stringify(activeChats));
         updateChatList();
@@ -256,19 +254,17 @@ function choose(e, id, id_emotion) {
     emotionElem.style.padding = "3px";
     span_message.appendChild(emotionElem);
 
-    // Tạo đối tượng reaction với trường messageId và room
     const reactionData = {
-        messageId: id,         // Sử dụng id của tin nhắn làm messageId
-        user: myname,          // Tên người gửi reaction
-        emotion: id_emotion,   // Loại emotion (1-5)
-        room: currentRoom      // Room hiện hành
+        messageId: id,
+        user: myname,
+        emotion: id_emotion,
+        room: currentRoom
     };
     socket.emit("emotion", JSON.stringify(reactionData));
 }
 
 socket.on("emotion", (data) => {
     const obj = JSON.parse(data);
-    // Sử dụng obj.messageId để lấy DOM của tin nhắn cần hiển thị reaction
     const span_message = document.getElementById(obj.messageId);
     if (!span_message) {
         console.error("Không tìm thấy phần tử với messageId:", obj.messageId);
@@ -287,3 +283,146 @@ socket.on("emotion", (data) => {
     emotionElem.style.padding = "3px";
     span_message.appendChild(emotionElem);
 });
+
+/************************************
+ * PHẦN 2: FRIEND FUNCTIONALITY
+ ************************************/
+// Các phần tử giao diện điều hướng cho chế độ Chat và Contacts
+const navMessages = document.getElementById('nav_messages');
+const navContacts = document.getElementById('nav_contacts');
+const chatMode = document.getElementById('chat_mode');
+const contactsMode = document.getElementById('contacts_mode');
+
+// Chuyển đổi giữa chế độ Chat và Contacts
+navMessages.addEventListener('click', () => {
+    chatMode.style.display = 'block';
+    contactsMode.style.display = 'none';
+});
+navContacts.addEventListener('click', () => {
+    chatMode.style.display = 'none';
+    contactsMode.style.display = 'block';
+    loadFriendRequests();
+    loadFriends();
+});
+
+// Hàm cập nhật nút "Kết bạn"/"Hủy kết bạn" trong danh sách Contacts
+function updateContactButtons() {
+    const buttons = document.querySelectorAll('#contacts_list .btn_add_friend');
+    buttons.forEach(button => {
+        const username = button.getAttribute('data-username');
+        if (username === myname) {
+            button.style.display = 'none';
+            return;
+        }
+        if (myFriends.includes(username)) {
+            button.textContent = "Hủy kết bạn";
+            button.onclick = function (e) {
+                e.stopPropagation();
+                socket.emit('cancelFriend', { myUsername: myname, friendUsername: username });
+            };
+        } else {
+            button.textContent = "Kết bạn";
+            button.onclick = function (e) {
+                e.stopPropagation();
+                socket.emit('addFriend', { myUsername: myname, friendUsername: username });
+            };
+        }
+    });
+}
+
+// Load lời mời kết bạn
+function loadFriendRequests() {
+    socket.emit('getFriendRequests', myname);
+}
+socket.on('friendRequests', (requests) => {
+    const friendRequestsContainer = document.getElementById('friend_requests_container');
+    friendRequestsContainer.innerHTML = "";
+    if (requests.length === 0) {
+        friendRequestsContainer.innerHTML = "<li>Không có lời mời kết bạn mới</li>";
+    } else {
+        requests.forEach(req => {
+            const li = document.createElement('li');
+            li.style.padding = '5px';
+            li.style.borderBottom = '1px solid #ddd';
+            li.textContent = `Từ: ${req.from}`;
+            const acceptBtn = document.createElement('button');
+            acceptBtn.textContent = "Chấp nhận";
+            acceptBtn.style.marginLeft = '10px';
+            acceptBtn.onclick = () => {
+                socket.emit('respondFriendRequest', { requestId: req._id, action: 'accepted' });
+            };
+            const rejectBtn = document.createElement('button');
+            rejectBtn.textContent = "Từ chối";
+            rejectBtn.style.marginLeft = '5px';
+            rejectBtn.onclick = () => {
+                socket.emit('respondFriendRequest', { requestId: req._id, action: 'rejected' });
+            };
+            li.appendChild(acceptBtn);
+            li.appendChild(rejectBtn);
+            friendRequestsContainer.appendChild(li);
+        });
+    }
+});
+
+// Load danh sách bạn bè
+function loadFriends() {
+    socket.emit('getFriends', myname);
+}
+socket.on('friendsList', (friends) => {
+    myFriends = friends;
+    const friendsContainer = document.getElementById('friends_container');
+    friendsContainer.innerHTML = "";
+    if (friends.length === 0) {
+        friendsContainer.innerHTML = "<li>Chưa có bạn bè nào</li>";
+    } else {
+        friends.forEach(friend => {
+            const li = document.createElement('li');
+            li.textContent = friend;
+            li.style.padding = '5px';
+            li.style.borderBottom = '1px solid #ddd';
+            friendsContainer.appendChild(li);
+        });
+    }
+    updateContactButtons();
+});
+
+// Xử lý kết quả từ server cho các sự kiện friend
+socket.on('cancelFriendResult', (data) => {
+    if (data.success) {
+        loadFriends();
+        loadFriendRequests();
+        alert(data.message);
+    } else {
+        alert(data.message);
+    }
+});
+socket.on('addFriendResult', (data) => {
+    if (data.success) {
+        loadFriendRequests();
+    } else {
+        alert(data.message);
+    }
+});
+socket.on('respondFriendRequestResult', (data) => {
+    if (data.success) {
+        loadFriendRequests();
+        loadFriends();
+        alert(data.message);
+    } else {
+        alert(data.message);
+    }
+});
+
+// Tìm kiếm trong Contacts Mode
+const searchContactsInput = document.getElementById('search_contacts');
+if (searchContactsInput) {
+    searchContactsInput.addEventListener('input', () => {
+        const keyword = searchContactsInput.value.toLowerCase();
+        const contactItems = document.querySelectorAll('#contacts_list li');
+        contactItems.forEach(item => {
+            const username = item.querySelector('p').textContent.toLowerCase();
+            item.style.display = username.includes(keyword) ? "block" : "none";
+        });
+        updateContactButtons();
+    });
+}

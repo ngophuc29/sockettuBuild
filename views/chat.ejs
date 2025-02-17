@@ -1,11 +1,71 @@
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+
 <div style="display: flex;">
-    <div class="user_panel" style="width: 25%; padding: 10px;">
-        <div class="user_search">
-            <input type="text" id="search_user" placeholder="Search user by name">
+    <!-- Navigation Panel -->
+    <div class="nav_panel" style="width: 15%; padding: 10px;">
+        <ul>
+            <li id="nav_messages" style="cursor: pointer; padding: 10px; border-bottom: 1px solid #ddd;">Tin Nhắn</li>
+            <li id="nav_contacts" style="cursor: pointer; padding: 10px;">Danh bạ</li>
+        </ul>
+    </div>
+
+    <!-- Chat Mode -->
+    <div id="chat_mode" style="width: 85%; display: block;">
+        <div class="user_panel" style="width: 25%; padding: 10px;">
+            <div class="user_search">
+                <input type="text" id="search_user" placeholder="Search user by name">
+            </div>
+            <ul class="list_user">
+                <% accounts.forEach((account)=> { %>
+                    <li style="cursor: pointer;">
+                        <div style="display: flex;">
+                            <span>UserName: </span>
+                            <p>
+                                <%= account.username %>
+                            </p>
+                        </div>
+                        <div style="display: flex;">
+                            <span>FullName: </span>
+                            <p>
+                                <%= account.fullname %>
+                            </p>
+                        </div>
+                    </li>
+                    <% }); %>
+            </ul>
         </div>
-        <ul class="list_user">
+
+        <div class="chat_list"
+            style="width: 25%; padding: 10px; border-left: 1px solid #ccc; border-right: 1px solid #ccc;">
+            <h3>Chats</h3>
+            <ul id="chat_list_ul"></ul>
+        </div>
+
+        <div class="container" style="width: 50%; padding: 10px;">
+            <ul id="ul_message"></ul>
+            <div class="container_send">
+                <input type="text" id="message" placeholder="Enter your message">
+                <button id="btn_send">Gửi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contacts Mode -->
+    <div id="contacts_mode" style="width: 85%; display: none;">
+        <div style="padding: 10px;">
+            <h3>Lời mời kết bạn</h3>
+            <ul id="friend_requests_container" style="list-style: none; padding: 0;"></ul>
+        </div>
+        <div style="padding: 10px;">
+            <h3>Danh sách bạn bè</h3>
+            <ul id="friends_container" style="list-style: none; padding: 0;"></ul>
+        </div>
+        <div style="padding: 10px;">
+            <input type="text" id="search_contacts" placeholder="Search user by username">
+        </div>
+        <ul class="list_user" id="contacts_list"
+            style="padding: 10px; background-color: rgb(204, 94, 94); overflow-y: scroll; height: 90vh;">
             <% accounts.forEach((account)=> { %>
                 <li style="cursor: pointer;">
                     <div style="display: flex;">
@@ -20,25 +80,14 @@
                             <%= account.fullname %>
                         </p>
                     </div>
+                    <!-- Nút kết bạn sẽ được cập nhật dựa trên trạng thái bạn bè -->
+                    <button class="btn_add_friend" data-username="<%= account.username %>">Kết bạn</button>
                 </li>
                 <% }); %>
         </ul>
     </div>
-
-    <div class="chat_list"
-        style="width: 25%; padding: 10px; border-left: 1px solid #ccc; border-right: 1px solid #ccc;">
-        <h3>Chats</h3>
-        <ul id="chat_list_ul"></ul>
-    </div>
-
-    <div class="container" style="width: 50%; padding: 10px;">
-        <ul id="ul_message"></ul>
-        <div class="container_send">
-            <input type="text" id="message" placeholder="Enter your message">
-            <button id="btn_send">Gửi</button>
-        </div>
-    </div>
 </div>
+
 <script>
     const myUsername = localStorage.getItem('username');
 </script>
