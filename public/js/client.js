@@ -258,17 +258,16 @@ function choose(e, id, id_emotion) {
 
     // Tạo đối tượng reaction với trường messageId và room
     const reactionData = {
-        messageId: id,         // Sử dụng id của tin nhắn làm messageId
-        user: myname,          // Tên người gửi reaction
-        emotion: id_emotion,   // Loại emotion (1-5)
-        room: currentRoom      // Room hiện hành
+        messageId: id,
+        user: myname,
+        emotion: id_emotion,
+        room: currentRoom
     };
     socket.emit("emotion", JSON.stringify(reactionData));
 }
 
 socket.on("emotion", (data) => {
     const obj = JSON.parse(data);
-    // Sử dụng obj.messageId để lấy DOM của tin nhắn cần hiển thị reaction
     const span_message = document.getElementById(obj.messageId);
     if (!span_message) {
         console.error("Không tìm thấy phần tử với messageId:", obj.messageId);
@@ -286,4 +285,130 @@ socket.on("emotion", (data) => {
     emotionElem.style.borderRadius = "10px";
     emotionElem.style.padding = "3px";
     span_message.appendChild(emotionElem);
+});
+
+
+// ----------------------------
+// New code: Navigation, Contacts, Friend Requests & Friend List
+// ----------------------------
+const navMessages = document.getElementById('nav_messages');
+const navContacts = document.getElementById('nav_contacts');
+const chatMode = document.getElementById('chat_mode');
+const contactsMode = document.getElementById('contacts_mode');
+
+navMessages.addEventListener('click', () => {
+    chatMode.style.display = 'block';
+    contactsMode.style.display = 'none';
+});
+
+navContacts.addEventListener('click', () => {
+    chatMode.style.display = 'none';
+    contactsMode.style.display = 'block';
+    loadFriendRequests();
+    loadFriends();
+});
+
+// Tìm kiếm trong Contacts Mode
+const searchContactsInput = document.getElementById('search_contacts');
+searchContactsInput.addEventListener('input', () => {
+    const keyword = searchContactsInput.value.toLowerCase();
+    const contactItems = document.querySelectorAll('#contacts_list li');
+    contactItems.forEach(item => {
+        const username = item.querySelector('p').textContent.toLowerCase();
+        if (username.includes(keyword)) {
+            item.style.display = 'block';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+});
+
+// Xử lý yêu cầu kết bạn qua socket.io (trong Contacts Mode)
+document.querySelectorAll('.btn_add_friend').forEach(button => {
+    button.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const friendUsername = this.getAttribute('data-username');
+        if (friendUsername === myname) {
+            alert("Không thể kết bạn với chính bạn");
+            return;
+        }
+        socket.emit('addFriend', { myUsername, friendUsername });
+    });
+});
+
+// Lắng nghe kết quả gửi lời mời từ server qua socket.io và reload danh sách lời mời
+socket.on('addFriendResult', (data) => {
+    if (data.success) {
+        loadFriendRequests();
+    } else {
+        console.error(data.message);
+        alert(data.message);
+    }
+});
+
+// Xử lý trả lời lời mời (chấp nhận hoặc từ chối)
+socket.on('respondFriendRequestResult', (data) => {
+    if (data.success) {
+        loadFriendRequests();
+        loadFriends();
+        alert(data.message);
+    } else {
+        alert(data.message);
+    }
+});
+
+// Hàm load friend requests từ server
+function loadFriendRequests() {
+    socket.emit('getFriendRequests', myname);
+}
+socket.on('friendRequests', (requests) => {
+    const friendRequestsContainer = document.getElementById('friend_requests_container');
+    friendRequestsContainer.innerHTML = "";
+    if (requests.length === 0) {
+        friendRequestsContainer.innerHTML = "<li>Không có lời mời kết bạn mới</li>";
+    } else {
+        requests.forEach(req => {
+            const li = document.createElement('li');
+            li.style.padding = '5px';
+            li.style.borderBottom = '1px solid #ddd';
+            li.textContent = `Từ: ${req.from} `;
+            // Tạo nút Chấp nhận
+            const acceptBtn = document.createElement('button');
+            acceptBtn.textContent = "Chấp nhận";
+            acceptBtn.style.marginLeft = '10px';
+            acceptBtn.addEventListener('click', () => {
+                socket.emit('respondFriendRequest', { requestId: req._id, action: 'accepted' });
+            });
+            // Tạo nút Từ chối
+            const rejectBtn = document.createElement('button');
+            rejectBtn.textContent = "Từ chối";
+            rejectBtn.style.marginLeft = '5px';
+            rejectBtn.addEventListener('click', () => {
+                socket.emit('respondFriendRequest', { requestId: req._id, action: 'rejected' });
+            });
+            li.appendChild(acceptBtn);
+            li.appendChild(rejectBtn);
+            friendRequestsContainer.appendChild(li);
+        });
+    }
+});
+
+// Hàm load friend list từ server
+function loadFriends() {
+    socket.emit('getFriends', myname);
+}
+socket.on('friendsList', (friends) => {
+    const friendsContainer = document.getElementById('friends_container');
+    friendsContainer.innerHTML = "";
+    if (friends.length === 0) {
+        friendsContainer.innerHTML = "<li>Chưa có bạn bè nào</li>";
+    } else {
+        friends.forEach(friend => {
+            const li = document.createElement('li');
+            li.textContent = friend;
+            li.style.padding = '5px';
+            li.style.borderBottom = '1px solid #ddd';
+            friendsContainer.appendChild(li);
+        });
+    }
 });

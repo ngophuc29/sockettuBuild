@@ -19,7 +19,6 @@ body {
     box-sizing: border-box;
 }
 
-
 .container_join {
     width: 100%;
     display: flex;
@@ -47,13 +46,15 @@ body {
     height: 90%;
     overflow: scroll;
 }
-#ul_message li{
+
+#ul_message li {
     display: flex;
     margin-top: 5px;
     align-items: center;
 }
-#ul_message li span p{
-    background-image:linear-gradient(rgb(204, 94, 94),rgb(160, 212, 212)) ;
+
+#ul_message li span p {
+    background-image: linear-gradient(rgb(204, 94, 94), rgb(160, 212, 212));
     padding: 5px;
     color: white;
     width: fit-content;
@@ -61,41 +62,46 @@ body {
     float: left;
     clear: both;
 }
-.choose_emotion{
+
+.choose_emotion {
     margin-left: 5px;
-    display: none !important; ;
+    display: none !important;
     position: relative;
 }
-.emotion{
+
+.emotion {
     background-color: #1f8300;
     padding: 5px;
     border-radius: 20px;
     position: absolute;
     display: flex;
     top: 20px;
-     
 }
+
 .emotion i {
     margin: 5px;
     transition: all 0.3s linear;
 }
-.emotion i:hover{
+
+.emotion i:hover {
     cursor: pointer;
     transform: scale(1.2);
 }
-#ul_message li:hover .choose_emotion{
-   display: block !important;
+
+#ul_message li:hover .choose_emotion {
+    display: block !important;
 }
-.right{
+
+.right {
     /* float: right !important; */
     flex-direction: row-reverse;
-    
 }
-.right .choose_emotion .emotion{
+
+.right .choose_emotion .emotion {
     /* float: right !important; */
     right: 10px;
-
 }
+
 .container_send {
     width: 100%;
     display: flex;
@@ -112,7 +118,7 @@ body {
     padding: 10px;
 }
 
-.list_user{
+.list_user {
     list-style: none;
     width: 30%;
     padding: 20px;
@@ -121,13 +127,29 @@ body {
     height: 90vh;
     box-sizing: border-box;
 }
+
 .list_user li {
     background-color: cyan;
     border-radius: 14px;
     padding: 16px;
     margin-top: 20px;
 }
-.list_user li div{
+
+.list_user li div {
     display: flex;
-    
+}
+
+/* New styles for navigation panel */
+.nav_panel {
+    background-color: #f0f0f0;
+}
+
+.nav_panel ul {
+    list-style: none;
+    padding: 0;
+}
+
+.nav_panel ul li {
+    margin-bottom: 10px;
+    cursor: pointer;
 }

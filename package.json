@@ -11,6 +11,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "cls": "^0.1.5",
     "ejs": "^3.1.10",
     "express": "^4.21.2",
     "mongoose": "^8.10.0",

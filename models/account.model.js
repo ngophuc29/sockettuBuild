@@ -1,6 +1,5 @@
 const mongoose = require('mongoose');
 
-
 const accountSchema = mongoose.Schema({
     username: {
         type: String,
@@ -15,11 +14,15 @@ const accountSchema = mongoose.Schema({
         type: String,
         required: true
     },
+    // Thêm trường lưu danh sách friend
+    friends: {
+        type: [String],
+        default: []
+    }
 },
     {
         versionKey: false,
         timestamps: true
-    }
-)
+    });
 
-module.exports = mongoose.model('account', accountSchema)
+module.exports = mongoose.model('account', accountSchema);
