@@ -133,6 +133,30 @@ io.on('connection', (client) => {
     });
 
     // Trả lời lời mời kết bạn (accepted hoặc rejected)
+    // client.on('respondFriendRequest', async (data) => {
+    //     try {
+    //         const { requestId, action } = data;
+    //         const request = await FriendRequest.findById(requestId);
+    //         if (!request) {
+    //             client.emit('respondFriendRequestResult', { success: false, message: "Lời mời không tồn tại" });
+    //             return;
+    //         }
+    //         if (request.status !== 'pending') {
+    //             client.emit('respondFriendRequestResult', { success: false, message: "Lời mời đã được xử lý" });
+    //             return;
+    //         }
+    //         request.status = action;
+    //         await request.save();
+    //         if (action === 'accepted') {
+    //             await accountModel.updateOne({ username: request.from }, { $addToSet: { friends: request.to } });
+    //             await accountModel.updateOne({ username: request.to }, { $addToSet: { friends: request.from } });
+    //         }
+    //         client.emit('respondFriendRequestResult', { success: true, message: `Lời mời đã được ${action}` });
+    //     } catch (err) {
+    //         console.error(err);
+    //         client.emit('respondFriendRequestResult', { success: false, message: "Lỗi server" });
+    //     }
+    // });
     client.on('respondFriendRequest', async (data) => {
         try {
             const { requestId, action } = data;
@@ -145,12 +169,13 @@ io.on('connection', (client) => {
                 client.emit('respondFriendRequestResult', { success: false, message: "Lời mời đã được xử lý" });
                 return;
             }
-            request.status = action;
-            await request.save();
             if (action === 'accepted') {
+                // Cập nhật danh sách bạn của cả 2 user
                 await accountModel.updateOne({ username: request.from }, { $addToSet: { friends: request.to } });
                 await accountModel.updateOne({ username: request.to }, { $addToSet: { friends: request.from } });
             }
+            // Xóa luôn lời mời kết bạn sau khi trả lời (dù là accepted hay rejected)
+            await FriendRequest.deleteOne({ _id: requestId });
             client.emit('respondFriendRequestResult', { success: true, message: `Lời mời đã được ${action}` });
         } catch (err) {
             console.error(err);
