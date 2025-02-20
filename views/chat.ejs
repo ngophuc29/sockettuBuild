@@ -1,22 +1,84 @@
-<link rel="stylesheet" href="css/style.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+<!DOCTYPE html>
+<html lang="en">
 
-<div style="display: flex;">
-    <!-- Navigation Panel -->
-    <div class="nav_panel" style="width: 15%; padding: 10px;">
-        <ul>
-            <li id="nav_messages" style="cursor: pointer; padding: 10px; border-bottom: 1px solid #ddd;">Tin Nhắn</li>
-            <li id="nav_contacts" style="cursor: pointer; padding: 10px;">Danh bạ</li>
-        </ul>
-    </div>
+<head>
+    <meta charset="UTF-8">
+    <title>Chat App</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+</head>
 
-    <!-- Chat Mode -->
-    <div id="chat_mode" style="width: 85%; display: block;">
-        <div class="user_panel" style="width: 25%; padding: 10px;">
-            <div class="user_search">
-                <input type="text" id="search_user" placeholder="Search user by name">
+<body>
+    <div style="display: flex;">
+        <!-- Navigation Panel -->
+        <div class="nav_panel" style="width: 15%; padding: 10px;">
+            <ul>
+                <li id="nav_messages" style="cursor: pointer; padding: 10px; border-bottom: 1px solid #ddd;">Tin Nhắn
+                </li>
+                <li id="nav_contacts" style="cursor: pointer; padding: 10px;">Danh bạ</li>
+            </ul>
+        </div>
+
+        <!-- Chat Mode -->
+        <div id="chat_mode" style="width: 85%; display: block;">
+            <div class="user_panel" style="width: 25%; padding: 10px;">
+                <div class="user_search">
+                    <input type="text" id="search_user" placeholder="Search user by name">
+                </div>
+                <ul class="list_user">
+                    <% accounts.forEach((account)=> { %>
+                        <li style="cursor: pointer;">
+                            <div style="display: flex;">
+                                <span>UserName: </span>
+                                <p>
+                                    <%= account.username %>
+                                </p>
+                            </div>
+                            <div style="display: flex;">
+                                <span>FullName: </span>
+                                <p>
+                                    <%= account.fullname %>
+                                </p>
+                            </div>
+                        </li>
+                        <% }); %>
+                </ul>
             </div>
-            <ul class="list_user">
+
+            <!-- Chat list có nút tạo group chat -->
+            <div class="chat_list"
+                style="width: 25%; padding: 10px; border-left: 1px solid #ccc; border-right: 1px solid #ccc;">
+                <h3>
+                    Chats
+                    <button id="btn_create_group" style="margin-left:10px;">+</button>
+                </h3>
+                <ul id="chat_list_ul"></ul>
+            </div>
+
+            <div class="container" style="width: 50%; padding: 10px;">
+                <ul id="ul_message"></ul>
+                <div class="container_send">
+                    <input type="text" id="message" placeholder="Enter your message">
+                    <button id="btn_send">Gửi</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contacts Mode -->
+        <div id="contacts_mode" style="width: 85%; display: none;">
+            <div style="padding: 10px;">
+                <h3>Lời mời kết bạn</h3>
+                <ul id="friend_requests_container" style="list-style: none; padding: 0;"></ul>
+            </div>
+            <div style="padding: 10px;">
+                <h3>Danh sách bạn bè</h3>
+                <ul id="friends_container" style="list-style: none; padding: 0;"></ul>
+            </div>
+            <div style="padding: 10px;">
+                <input type="text" id="search_contacts" placeholder="Search user by username">
+            </div>
+            <ul class="list_user" id="contacts_list"
+                style="padding: 10px; background-color: rgb(204, 94, 94); overflow-y: scroll; height: 90vh;">
                 <% accounts.forEach((account)=> { %>
                     <li style="cursor: pointer;">
                         <div style="display: flex;">
@@ -31,65 +93,55 @@
                                 <%= account.fullname %>
                             </p>
                         </div>
+                        <!-- Nút kết bạn sẽ được cập nhật dựa trên trạng thái bạn bè -->
+                        <button class="btn_add_friend" data-username="<%= account.username %>">Kết bạn</button>
                     </li>
                     <% }); %>
             </ul>
         </div>
+    </div>
 
-        <div class="chat_list"
-            style="width: 25%; padding: 10px; border-left: 1px solid #ccc; border-right: 1px solid #ccc;">
-            <h3>Chats</h3>
-            <ul id="chat_list_ul"></ul>
-        </div>
-
-        <div class="container" style="width: 50%; padding: 10px;">
-            <ul id="ul_message"></ul>
-            <div class="container_send">
-                <input type="text" id="message" placeholder="Enter your message">
-                <button id="btn_send">Gửi</button>
+    <!-- Modal tạo Group Chat -->
+    <div id="groupModal" class="modal"
+        style="display:none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5);">
+        <div class="modal-content"
+            style="background:#fff; margin:10% auto; padding:20px; width:300px; position: relative;">
+            <span id="closeModal" style="position: absolute; top:5px; right:10px; cursor:pointer;">&times;</span>
+            <h3>Tạo nhóm chat</h3>
+            <input type="text" id="groupName" placeholder="Tên nhóm chat"
+                style="width:100%; padding:5px; margin-bottom:10px;">
+            <h4>Chọn thành viên:</h4>
+            <div id="groupMembersList"
+                style="max-height:200px; overflow-y:scroll; border:1px solid #ccc; padding:5px; margin-bottom:10px;">
+                <% accounts.forEach((account)=> { %>
+                    <div class="group-member">
+                        <input type="checkbox" class="memberCheckbox" value="<%= account.username %>">
+                        <%= account.username %>
+                    </div>
+                    <% }); %>
             </div>
+            <button id="createGroupBtn" style="width:100%; padding:5px;">Tạo nhóm</button>
         </div>
     </div>
 
-    <!-- Contacts Mode -->
-    <div id="contacts_mode" style="width: 85%; display: none;">
-        <div style="padding: 10px;">
-            <h3>Lời mời kết bạn</h3>
-            <ul id="friend_requests_container" style="list-style: none; padding: 0;"></ul>
-        </div>
-        <div style="padding: 10px;">
-            <h3>Danh sách bạn bè</h3>
-            <ul id="friends_container" style="list-style: none; padding: 0;"></ul>
-        </div>
-        <div style="padding: 10px;">
-            <input type="text" id="search_contacts" placeholder="Search user by username">
-        </div>
-        <ul class="list_user" id="contacts_list"
-            style="padding: 10px; background-color: rgb(204, 94, 94); overflow-y: scroll; height: 90vh;">
-            <% accounts.forEach((account)=> { %>
-                <li style="cursor: pointer;">
-                    <div style="display: flex;">
-                        <span>UserName: </span>
-                        <p>
-                            <%= account.username %>
-                        </p>
-                    </div>
-                    <div style="display: flex;">
-                        <span>FullName: </span>
-                        <p>
-                            <%= account.fullname %>
-                        </p>
-                    </div>
-                    <!-- Nút kết bạn sẽ được cập nhật dựa trên trạng thái bạn bè -->
-                    <button class="btn_add_friend" data-username="<%= account.username %>">Kết bạn</button>
-                </li>
-                <% }); %>
-        </ul>
-    </div>
-</div>
+    <script>
+        // Lấy myUsername từ localStorage (đã được lưu khi đăng nhập hoặc trước đó)
+        const myUsername = localStorage.getItem('username');
+    </script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/client.js"></script>
+    <script>
+        // Sau khi DOM load, ẩn đi các phần tử trong danh sách group chat thuộc chính user
+        window.addEventListener("DOMContentLoaded", () => {
+            const memberElements = document.querySelectorAll('.group-member');
+            memberElements.forEach(elem => {
+                const checkbox = elem.querySelector('.memberCheckbox');
+                if (checkbox && checkbox.value === myUsername) {
+                    elem.style.display = 'none';
+                }
+            });
+        });
+    </script>
+</body>
 
-<script>
-    const myUsername = localStorage.getItem('username');
-</script>
-<script src="/socket.io/socket.io.js"></script>
-<script src="js/client.js"></script>
+</html>

@@ -6,7 +6,10 @@ const btn_send = document.getElementById("btn_send");
 const ul_message = document.getElementById("ul_message");
 const socket = io.connect();
 
+// Đăng ký username ngay khi kết nối
 let myname = localStorage.getItem("username") || myUsername;
+socket.emit("registerUser", myname);
+
 let currentRoom = localStorage.getItem("currentRoom") || null;
 let currentChatPartner = null;
 let activeChats = JSON.parse(localStorage.getItem("activeChats")) || {};
@@ -93,6 +96,7 @@ function appendMessage(obj) {
 
     const li = document.createElement("li");
     li.innerHTML = `
+    <div class="sender-name" style="font-weight:bold; margin-bottom:2px;">${obj.name}</div>
         <span id="${msgId}">
             <p>${obj.message}</p>
         </span>
@@ -287,13 +291,11 @@ socket.on("emotion", (data) => {
 /************************************
  * PHẦN 2: FRIEND FUNCTIONALITY
  ************************************/
-// Các phần tử giao diện điều hướng cho chế độ Chat và Contacts
 const navMessages = document.getElementById('nav_messages');
 const navContacts = document.getElementById('nav_contacts');
 const chatMode = document.getElementById('chat_mode');
 const contactsMode = document.getElementById('contacts_mode');
 
-// Chuyển đổi giữa chế độ Chat và Contacts
 navMessages.addEventListener('click', () => {
     chatMode.style.display = 'block';
     contactsMode.style.display = 'none';
@@ -305,7 +307,6 @@ navContacts.addEventListener('click', () => {
     loadFriends();
 });
 
-// Hàm cập nhật nút "Kết bạn"/"Hủy kết bạn" trong danh sách Contacts
 function updateContactButtons() {
     const buttons = document.querySelectorAll('#contacts_list .btn_add_friend');
     buttons.forEach(button => {
@@ -330,7 +331,6 @@ function updateContactButtons() {
     });
 }
 
-// Load lời mời kết bạn
 function loadFriendRequests() {
     socket.emit('getFriendRequests', myname);
 }
@@ -364,7 +364,6 @@ socket.on('friendRequests', (requests) => {
     }
 });
 
-// Load danh sách bạn bè
 function loadFriends() {
     socket.emit('getFriends', myname);
 }
@@ -386,7 +385,6 @@ socket.on('friendsList', (friends) => {
     updateContactButtons();
 });
 
-// Xử lý kết quả từ server cho các sự kiện friend
 socket.on('cancelFriendResult', (data) => {
     if (data.success) {
         loadFriends();
@@ -413,7 +411,6 @@ socket.on('respondFriendRequestResult', (data) => {
     }
 });
 
-// Tìm kiếm trong Contacts Mode
 const searchContactsInput = document.getElementById('search_contacts');
 if (searchContactsInput) {
     searchContactsInput.addEventListener('input', () => {
@@ -426,3 +423,58 @@ if (searchContactsInput) {
         updateContactButtons();
     });
 }
+
+/************************************
+ * PHẦN 3: GROUP CHAT FUNCTIONALITY
+ ************************************/
+// Xử lý mở/đóng modal tạo nhóm chat
+const btnCreateGroup = document.getElementById("btn_create_group");
+const groupModal = document.getElementById("groupModal");
+const closeModal = document.getElementById("closeModal");
+const createGroupBtn = document.getElementById("createGroupBtn");
+
+btnCreateGroup.addEventListener("click", () => {
+    groupModal.style.display = "block";
+});
+closeModal.addEventListener("click", () => {
+    groupModal.style.display = "none";
+});
+window.addEventListener("click", (event) => {
+    if (event.target == groupModal) {
+        groupModal.style.display = "none";
+    }
+});
+createGroupBtn.addEventListener("click", () => {
+    const groupName = document.getElementById("groupName").value;
+    if (!groupName) {
+        alert("Vui lòng nhập tên nhóm");
+        return;
+    }
+    // Lấy danh sách thành viên được chọn
+    const checkboxes = document.querySelectorAll(".memberCheckbox");
+    const members = [];
+    checkboxes.forEach(chk => {
+        if (chk.checked) {
+            members.push(chk.value);
+        }
+    });
+    if (members.length === 0) {
+        alert("Chọn ít nhất 1 thành viên");
+        return;
+    }
+    socket.emit("createGroupChat", { groupName, members });
+    groupModal.style.display = "none";
+});
+
+// Lắng nghe sự kiện nhận thông báo tạo group chat mới từ server
+socket.on("newGroupChat", (data) => {
+    const groupChat = JSON.parse(data);
+    // Nếu group chat chưa có trong danh sách, thêm vào activeChats
+    if (!activeChats[groupChat.roomId]) {
+        activeChats[groupChat.roomId] = { partner: groupChat.groupName, unread: 0, isGroup: true };
+        localStorage.setItem("activeChats", JSON.stringify(activeChats));
+        updateChatList();
+        alert("Đã tạo nhóm chat: " + groupChat.groupName);
+    }
+});
+
