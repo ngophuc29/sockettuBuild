@@ -15,13 +15,18 @@ const Reaction = require('./models/reaction.model');
 // --- Các model cho friend functionality ---
 const accountModel = require('./models/account.model');
 const FriendRequest = require('./models/friendRequest.model');
+const GroupChat = require('./models/groupChat.model');
+ 
+
+
+ 
 
 app.use(express.json());
 app.use(express.static("public"));
 app.set('view engine', 'ejs');
 app.set("views", 'views');
 
-// Object lưu các socket của user (key là username)
+// Object lưu các socket của user (key là username)  -> dùng để gửi thông báo riêng cho user
 const users = {};
 
 io.on('connection', (client) => {
@@ -234,6 +239,28 @@ io.on('connection', (client) => {
     // ---------------------------
     // PHẦN GROUP CHAT
     // ---------------------------
+    // client.on("createGroupChat", (data) => {
+    //     // data: { groupName, members } members: array of usernames được chọn
+    //     const creator = client.username;
+    //     // Đảm bảo creator luôn có trong danh sách thành viên
+    //     if (!data.members.includes(creator)) {
+    //         data.members.push(creator);
+    //     }
+    //     // Tạo roomId cho group chat (dùng tên nhóm + timestamp)
+    //     const roomId = data.groupName + "_" + Date.now();
+    //     // Cho người tạo chat join ngay vào room group
+    //     client.join(roomId);
+    //     // Gửi thông báo tới tất cả thành viên đã chọn (nếu đang online)
+    //     data.members.forEach((member) => {
+    //         if (users[member]) {
+    //             users[member].emit("newGroupChat", JSON.stringify({
+    //                 groupName: data.groupName,
+    //                 roomId: roomId,
+    //                 members: data.members
+    //             }));
+    //         }
+    //     });
+    // });
     client.on("createGroupChat", (data) => {
         // data: { groupName, members } members: array of usernames được chọn
         const creator = client.username;
@@ -245,16 +272,28 @@ io.on('connection', (client) => {
         const roomId = data.groupName + "_" + Date.now();
         // Cho người tạo chat join ngay vào room group
         client.join(roomId);
-        // Gửi thông báo tới tất cả thành viên đã chọn (nếu đang online)
-        data.members.forEach((member) => {
-            if (users[member]) {
-                users[member].emit("newGroupChat", JSON.stringify({
-                    groupName: data.groupName,
-                    roomId: roomId,
-                    members: data.members
-                }));
-            }
-        });
+
+        // Lưu thông tin group chat vào DB
+        GroupChat.create({
+            groupName: data.groupName,
+            roomId: roomId,
+            members: data.members
+        })
+            .then(() => {
+                // Sau khi lưu thành công, gửi thông báo tới các thành viên đang online
+                data.members.forEach((member) => {
+                    if (users[member]) {
+                        users[member].emit("newGroupChat", JSON.stringify({
+                            groupName: data.groupName,
+                            roomId: roomId,
+                            members: data.members
+                        }));
+                    }
+                });
+            })
+            .catch(err => {
+                console.error("Error creating group chat:", err);
+            });
     });
 
 
