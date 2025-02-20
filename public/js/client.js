@@ -140,17 +140,25 @@ socket.on("thread", (data) => {
 });
 
 socket.on("notification", (data) => {
+    // Log để debug
+    console.log("Notification received:", data);
     const obj = JSON.parse(data.message);
-    if (obj.room !== currentRoom) {
-        if (activeChats[obj.room]) {
-            activeChats[obj.room].unread = (activeChats[obj.room].unread || 0) + 1;
+    const roomNotified = data.room;
+    // Nếu bạn không đang ở trong phòng đó, cập nhật số tin chưa đọc
+    if (roomNotified !== currentRoom) {
+        if (activeChats[roomNotified]) {
+            // Nếu đã có thông tin (với partner là tên nhóm), chỉ tăng unread
+            activeChats[roomNotified].unread = (activeChats[roomNotified].unread || 0) + 1;
         } else {
-            activeChats[obj.room] = { partner: obj.name, unread: 1 };
+            // Nếu chưa có entry, sử dụng groupName nếu có, nếu không fallback về obj.name
+            const partnerName = obj.groupName ? obj.groupName : obj.name;
+            activeChats[roomNotified] = { partner: partnerName, unread: 1 };
         }
         localStorage.setItem("activeChats", JSON.stringify(activeChats));
         updateChatList();
     }
 });
+
 
 function updateChatList() {
     const chatListUl = document.getElementById("chat_list_ul");
@@ -469,7 +477,7 @@ createGroupBtn.addEventListener("click", () => {
 // Lắng nghe sự kiện nhận thông báo tạo group chat mới từ server
 socket.on("newGroupChat", (data) => {
     const groupChat = JSON.parse(data);
-    // Nếu group chat chưa có trong danh sách, thêm vào activeChats
+    // Nếu group chat chưa có trong danh sách, thêm vào activeChats với partner là tên nhóm
     if (!activeChats[groupChat.roomId]) {
         activeChats[groupChat.roomId] = { partner: groupChat.groupName, unread: 0, isGroup: true };
         localStorage.setItem("activeChats", JSON.stringify(activeChats));
@@ -477,4 +485,5 @@ socket.on("newGroupChat", (data) => {
         alert("Đã tạo nhóm chat: " + groupChat.groupName);
     }
 });
+
 

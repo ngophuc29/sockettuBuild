@@ -16,10 +16,6 @@ const Reaction = require('./models/reaction.model');
 const accountModel = require('./models/account.model');
 const FriendRequest = require('./models/friendRequest.model');
 const GroupChat = require('./models/groupChat.model');
- 
-
-
- 
 
 app.use(express.json());
 app.use(express.static("public"));
@@ -44,16 +40,16 @@ io.on('connection', (client) => {
     });
 
     // ---------------------------
-    // PHẦN CHAT (CODE CŨ)
+    // PHẦN CHAT
     // ---------------------------
-    var room;
     client.on('join', async (data) => {
-        room = data;
-        client.join(room);
+        // Sử dụng biến cục bộ cho phòng của từng client
+        const currentRoom = data;
+        client.join(currentRoom);
         try {
-            const history = await Message.find({ room: data }).sort({ createdAt: 1 });
+            const history = await Message.find({ room: currentRoom }).sort({ createdAt: 1 });
             client.emit("history", JSON.stringify(history));
-            const reactions = await Reaction.find({ room: data }).sort({ createdAt: 1 });
+            const reactions = await Reaction.find({ room: currentRoom }).sort({ createdAt: 1 });
             client.emit("reactionHistory", JSON.stringify(reactions));
         } catch (err) {
             console.error("Error retrieving chat history:", err);
@@ -64,27 +60,6 @@ io.on('connection', (client) => {
         client.leave(data);
     });
 
-    // client.on("message", async (data) => {
-    //     let messageObj;
-    //     try {
-    //         messageObj = JSON.parse(data);
-    //     } catch (err) {
-    //         console.error("Error parsing message data:", err);
-    //         return;
-    //     }
-    //     try {
-    //         const newMessage = await Message.create({
-    //             name: messageObj.name,
-    //             message: messageObj.message,
-    //             room: messageObj.room
-    //         });
-    //         messageObj._id = newMessage._id; // Gán _id của MongoDB cho messageObj
-    //         io.to(room).emit("thread", JSON.stringify(messageObj));
-    //         client.broadcast.emit("notification", { room: room, message: JSON.stringify(messageObj) });
-    //     } catch (err) {
-    //         console.error("Error saving message:", err);
-    //     }
-    // });
     client.on("message", async (data) => {
         let messageObj;
         try {
@@ -93,29 +68,42 @@ io.on('connection', (client) => {
             console.error("Error parsing message data:", err);
             return;
         }
+        // Dùng biến cục bộ currentRoom từ messageObj.room
+        const currentRoom = messageObj.room;
         try {
             const newMessage = await Message.create({
                 name: messageObj.name,
                 message: messageObj.message,
-                room: messageObj.room
+                room: currentRoom
             });
             messageObj._id = newMessage._id; // Gán _id của MongoDB cho messageObj
 
-            // Gửi tin nhắn đến tất cả client đang join room
-            io.to(room).emit("thread", JSON.stringify(messageObj));
+            // Gửi tin nhắn đến tất cả client trong currentRoom
+            io.to(currentRoom).emit("thread", JSON.stringify(messageObj));
 
             // Phân biệt xử lý thông báo:
-            if (room.indexOf('_') > -1) {
-                // Đây là group chat -> chỉ gửi tới các client trong room (ngoại trừ sender)
-                client.broadcast.to(room).emit("notification", { room: room, message: JSON.stringify(messageObj) });
+            if (currentRoom.indexOf('_') > -1) {
+                // Đây là group chat.
+                // Lấy thông tin nhóm từ DB và gửi thông báo riêng cho từng thành viên.
+                GroupChat.findOne({ roomId: currentRoom }, (err, group) => {
+                    if (err) {
+                        console.error("Error retrieving group info:", err);
+                        return;
+                    }
+                    if (group) {
+                        group.members.forEach(member => {
+                            if (member !== client.username && users[member]) {
+                                users[member].emit("notification", { room: currentRoom, message: JSON.stringify(messageObj) });
+                            }
+                        });
+                    }
+                });
             } else {
                 // Đây là private chat (room có dạng "phuc-kk")
-                // Lấy danh sách các thành viên từ room name
-                const participants = room.split('-');
+                const participants = currentRoom.split('-');
                 participants.forEach(user => {
-                    // Gửi thông báo riêng nếu user không phải là người gửi và có đang online (đã đăng ký socket)
                     if (user !== client.username && users[user]) {
-                        users[user].emit("notification", { room: room, message: JSON.stringify(messageObj) });
+                        users[user].emit("notification", { room: currentRoom, message: JSON.stringify(messageObj) });
                     }
                 });
             }
@@ -143,11 +131,13 @@ io.on('connection', (client) => {
         } catch (err) {
             console.error("Error saving reaction:", err);
         }
-        io.to(room).emit("emotion", data);
+        // Sử dụng room từ reactionObj để đảm bảo chính xác
+        io.to(reactionObj.room).emit("emotion", data);
     });
 
     // ---------------------------
     // PHẦN FRIEND FUNCTIONALITY
+    // (Các sự kiện friend giữ nguyên)
     // ---------------------------
     client.on('addFriend', async (data) => {
         try {
@@ -239,38 +229,13 @@ io.on('connection', (client) => {
     // ---------------------------
     // PHẦN GROUP CHAT
     // ---------------------------
-    // client.on("createGroupChat", (data) => {
-    //     // data: { groupName, members } members: array of usernames được chọn
-    //     const creator = client.username;
-    //     // Đảm bảo creator luôn có trong danh sách thành viên
-    //     if (!data.members.includes(creator)) {
-    //         data.members.push(creator);
-    //     }
-    //     // Tạo roomId cho group chat (dùng tên nhóm + timestamp)
-    //     const roomId = data.groupName + "_" + Date.now();
-    //     // Cho người tạo chat join ngay vào room group
-    //     client.join(roomId);
-    //     // Gửi thông báo tới tất cả thành viên đã chọn (nếu đang online)
-    //     data.members.forEach((member) => {
-    //         if (users[member]) {
-    //             users[member].emit("newGroupChat", JSON.stringify({
-    //                 groupName: data.groupName,
-    //                 roomId: roomId,
-    //                 members: data.members
-    //             }));
-    //         }
-    //     });
-    // });
     client.on("createGroupChat", (data) => {
         // data: { groupName, members } members: array of usernames được chọn
         const creator = client.username;
-        // Đảm bảo creator luôn có trong danh sách thành viên
         if (!data.members.includes(creator)) {
             data.members.push(creator);
         }
-        // Tạo roomId cho group chat (dùng tên nhóm + timestamp)
         const roomId = data.groupName + "_" + Date.now();
-        // Cho người tạo chat join ngay vào room group
         client.join(roomId);
 
         // Lưu thông tin group chat vào DB
@@ -280,7 +245,6 @@ io.on('connection', (client) => {
             members: data.members
         })
             .then(() => {
-                // Sau khi lưu thành công, gửi thông báo tới các thành viên đang online
                 data.members.forEach((member) => {
                     if (users[member]) {
                         users[member].emit("newGroupChat", JSON.stringify({
@@ -295,10 +259,6 @@ io.on('connection', (client) => {
                 console.error("Error creating group chat:", err);
             });
     });
-
-
-
-    
 });
 
 connectDB();
