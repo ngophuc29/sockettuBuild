@@ -22,7 +22,7 @@ app.use(express.static("public"));
 app.set('view engine', 'ejs');
 app.set("views", 'views');
 
-// Object lưu các socket của user (key là username)  -> dùng để gửi thông báo riêng cho user
+// Object lưu các socket của user (key là username) -> dùng để gửi thông báo riêng cho user
 const users = {};
 
 io.on('connection', (client) => {
@@ -84,12 +84,9 @@ io.on('connection', (client) => {
             // Phân biệt xử lý thông báo:
             if (currentRoom.indexOf('_') > -1) {
                 // Đây là group chat.
-                // Lấy thông tin nhóm từ DB và gửi thông báo riêng cho từng thành viên.
-                GroupChat.findOne({ roomId: currentRoom }, (err, group) => {
-                    if (err) {
-                        console.error("Error retrieving group info:", err);
-                        return;
-                    }
+                // Sử dụng async/await để lấy thông tin nhóm từ DB
+                try {
+                    const group = await GroupChat.findOne({ roomId: currentRoom });
                     if (group) {
                         group.members.forEach(member => {
                             if (member !== client.username && users[member]) {
@@ -97,7 +94,9 @@ io.on('connection', (client) => {
                             }
                         });
                     }
-                });
+                } catch (err) {
+                    console.error("Error retrieving group info:", err);
+                }
             } else {
                 // Đây là private chat (room có dạng "phuc-kk")
                 const participants = currentRoom.split('-');
@@ -137,7 +136,6 @@ io.on('connection', (client) => {
 
     // ---------------------------
     // PHẦN FRIEND FUNCTIONALITY
-    // (Các sự kiện friend giữ nguyên)
     // ---------------------------
     client.on('addFriend', async (data) => {
         try {
