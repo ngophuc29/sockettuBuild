@@ -22,17 +22,18 @@ app.use(express.static("public"));
 app.set('view engine', 'ejs');
 app.set("views", 'views');
 
-// Object lưu các socket của user (key là username) -> dùng để gửi thông báo riêng cho user
+// Object lưu các socket của user (key là username)
 const users = {};
 
 io.on('connection', (client) => {
     console.log('a user connected');
 
-    // Khi client đăng ký username
+    // Đăng ký username khi client kết nối
     client.on("registerUser", (username) => {
         users[username] = client;
         client.username = username;
     });
+
     client.on("disconnect", () => {
         if (client.username) {
             delete users[client.username];
@@ -77,8 +78,9 @@ io.on('connection', (client) => {
             messageObj._id = newMessage._id;
             io.to(currentRoom).emit("thread", JSON.stringify(messageObj));
 
+            // Phát thông báo đến các thành viên trong phòng
             if (currentRoom.indexOf('_') > -1) {
-                // Group chat: lấy thông tin nhóm từ DB và gửi thông báo riêng cho từng thành viên.
+                // Group chat: gửi thông báo đến các thành viên khác
                 try {
                     const group = await GroupChat.findOne({ roomId: currentRoom });
                     if (group) {
@@ -92,7 +94,7 @@ io.on('connection', (client) => {
                     console.error("Error retrieving group info:", err);
                 }
             } else {
-                // Private chat: gửi thông báo riêng cho từng thành viên theo phòng (ví dụ: "alice-bob")
+                // Private chat: gửi thông báo đến từng thành viên
                 const participants = currentRoom.split('-');
                 participants.forEach(user => {
                     if (user !== client.username && users[user]) {
@@ -102,6 +104,30 @@ io.on('connection', (client) => {
             }
         } catch (err) {
             console.error("Error saving message:", err);
+        }
+    });
+
+    // --- Chức năng xóa tin nhắn ---
+    client.on("deleteMessage", async (data) => {
+        // data: { messageId, room }
+        try {
+            const msg = await Message.findById(data.messageId);
+            if (!msg) {
+                client.emit("deleteMessageResult", { success: false, message: "Tin nhắn không tồn tại." });
+                return;
+            }
+            // Chỉ cho phép người gửi xóa tin nhắn của chính mình
+            if (msg.name !== client.username) {
+                client.emit("deleteMessageResult", { success: false, message: "Bạn chỉ được xóa tin nhắn của chính mình." });
+                return;
+            }
+            await Message.deleteOne({ _id: data.messageId });
+            // Phát thông báo đến toàn bộ client trong phòng để loại bỏ tin nhắn đó khỏi giao diện
+            io.to(data.room).emit("messageDeleted", JSON.stringify({ messageId: data.messageId, room: data.room }));
+            client.emit("deleteMessageResult", { success: true, message: "Đã xóa tin nhắn thành công." });
+        } catch (err) {
+            console.error("Error deleting message:", err);
+            client.emit("deleteMessageResult", { success: false, message: "Lỗi server." });
         }
     });
 
@@ -219,15 +245,13 @@ io.on('connection', (client) => {
     // PHẦN GROUP CHAT
     // ---------------------------
     client.on("createGroupChat", (data) => {
-        // data: { groupName, members } members: array of usernames được chọn
+        // data: { groupName, members }
         const creator = client.username;
         if (!data.members.includes(creator)) {
             data.members.push(creator);
         }
         const roomId = data.groupName + "_" + Date.now();
         client.join(roomId);
-
-        // Lưu thông tin group chat vào DB
         GroupChat.create({
             groupName: data.groupName,
             roomId: roomId,
@@ -266,12 +290,11 @@ io.on('connection', (client) => {
                     messages: messages
                 });
             }
-            // Lấy các private chat từ danh sách bạn bè
+            // Lấy các private chat dựa trên danh sách bạn bè
             const account = await accountModel.findOne({ username });
             const privateChats = [];
             if (account && account.friends && account.friends.length > 0) {
                 for (const friend of account.friends) {
-                    // Giả sử phòng chat private được tạo theo định dạng: sorted(username, friend)
                     const room = [username, friend].sort().join('-');
                     const messages = await Message.find({ room: room }).sort({ createdAt: 1 });
                     privateChats.push({

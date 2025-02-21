@@ -96,6 +96,7 @@ function appendMessage(obj) {
     const msgId = obj._id ? obj._id : obj.id;
     if (document.getElementById(msgId)) return;
     const li = document.createElement("li");
+    li.id = "msg-" + msgId;
     li.innerHTML = `
         <div class="sender-name" style="font-weight:bold; margin-bottom:2px;">${obj.name}</div>
         <span id="${msgId}">
@@ -103,6 +104,7 @@ function appendMessage(obj) {
         </span>
         <div>
             <i onclick="show(event, '${msgId}')" class="choose_emotion fa-regular fa-face-smile"></i>
+            ${obj.name === myname ? `<button class="btn_delete" onclick="deleteMessage('${msgId}', '${obj.room}')">X</button>` : ""}
         </div>
     `;
     if (obj.name === myname) {
@@ -122,6 +124,26 @@ function saveMessage(messageObj) {
     }
 }
 
+// Hàm gửi yêu cầu xóa tin nhắn với xác nhận
+function deleteMessage(msgId, room) {
+    if (confirm("Bạn có chắc muốn xóa tin nhắn này không?")) {
+        socket.emit("deleteMessage", { messageId: msgId, room: room });
+    }
+}
+
+// Khi nhận event tin nhắn đã bị xóa, loại bỏ khỏi UI
+socket.on("messageDeleted", (data) => {
+    const obj = JSON.parse(data);
+    const li = document.getElementById("msg-" + obj.messageId);
+    if (li) {
+        li.remove();
+    }
+});
+
+socket.on("deleteMessageResult", (data) => {
+    alert(data.message);
+});
+
 // Xử lý nhận tin nhắn mới (thread)
 socket.on("thread", (data) => {
     const obj = JSON.parse(data);
@@ -130,11 +152,9 @@ socket.on("thread", (data) => {
     if (obj.room === currentRoom) {
         appendMessage(obj);
     } else {
-        // Nếu tin nhắn đến từ phòng khác:
         if (activeChats[obj.room]) {
             activeChats[obj.room].unread = (activeChats[obj.room].unread || 0) + 1;
         } else {
-            // Tạo entry mới: nếu room chứa '_' thì là group chat, dùng obj.groupName nếu có
             if (obj.room.indexOf('_') > -1) {
                 activeChats[obj.room] = { partner: obj.groupName ? obj.groupName : "Group Chat", unread: 1, isGroup: true };
             } else {
@@ -147,7 +167,7 @@ socket.on("thread", (data) => {
     }
 });
 
-// Xử lý sự kiện "notification"
+// Xử lý event "notification"
 socket.on("notification", (data) => {
     console.log("Notification received:", data);
     const obj = JSON.parse(data.message);
@@ -164,34 +184,23 @@ socket.on("notification", (data) => {
     }
 });
 
-// Khi nhận dữ liệu cuộc trò chuyện từ server, merge với activeChats để không mất các entry cũ
+// Khi nhận dữ liệu cuộc trò chuyện từ server, merge vào activeChats mà không mất các entry cũ
 socket.on("userConversations", (data) => {
     const conversations = JSON.parse(data);
-    // Merge group chats
     if (conversations.groupChats && conversations.groupChats.length > 0) {
         conversations.groupChats.forEach(group => {
-            // Nếu entry chưa tồn tại, tạo mới; nếu đã tồn tại, chỉ cập nhật unread nếu có dữ liệu từ server
             if (!activeChats[group.roomId]) {
-                activeChats[group.roomId] = {
-                    partner: group.groupName,
-                    unread: group.unread || 0,
-                    isGroup: true
-                };
+                activeChats[group.roomId] = { partner: group.groupName, unread: group.unread || 0, isGroup: true };
             } else {
-                // Giữ lại partner của group chat nếu đã được thiết lập
                 activeChats[group.roomId].unread = group.unread || activeChats[group.roomId].unread;
             }
         });
     }
-    // Merge private chats
     if (conversations.privateChats && conversations.privateChats.length > 0) {
         conversations.privateChats.forEach(chat => {
             const roomId = chat.roomId || chat.room;
             if (!activeChats[roomId]) {
-                activeChats[roomId] = {
-                    partner: chat.friend,
-                    unread: chat.unread || 0
-                };
+                activeChats[roomId] = { partner: chat.friend, unread: chat.unread || 0 };
             } else {
                 activeChats[roomId].unread = chat.unread || activeChats[roomId].unread;
             }
@@ -523,14 +532,11 @@ socket.on("newGroupChat", (data) => {
 socket.emit("getUserConversations", myname);
 socket.on("userConversations", (data) => {
     const conversations = JSON.parse(data);
-    // Merge dữ liệu từ server vào activeChats mà không ghi đè các entry cũ
     if (conversations.groupChats && conversations.groupChats.length > 0) {
         conversations.groupChats.forEach(group => {
-            // Nếu đã có entry, giữ partner; nếu chưa, tạo mới
             if (!activeChats[group.roomId]) {
                 activeChats[group.roomId] = { partner: group.groupName, unread: group.unread || 0, isGroup: true };
             } else {
-                // Cập nhật unread nếu có
                 activeChats[group.roomId].unread = group.unread || activeChats[group.roomId].unread;
             }
         });
@@ -550,6 +556,5 @@ socket.on("userConversations", (data) => {
 });
 
 function renderUserConversations(conversations) {
-    // Nếu bạn muốn render riêng, bạn có thể gọi updateChatList()
     updateChatList();
 }
