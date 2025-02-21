@@ -6,6 +6,34 @@
     <title>Chat App</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <style>
+        /* Một số style cơ bản */
+        #conversationList {
+            margin-top: 20px;
+            max-height: 50vh;
+            overflow-y: auto;
+        }
+
+        .conversation-group,
+        .conversation-private {
+            border: 1px solid #ccc;
+            margin-bottom: 10px;
+            padding: 5px;
+            cursor: pointer;
+        }
+
+        .conversation-group h3,
+        .conversation-private h3 {
+            margin: 0;
+            font-size: 1.1em;
+        }
+
+        .conversation-group p,
+        .conversation-private p {
+            margin: 2px 0;
+            font-size: 0.9em;
+        }
+    </style>
 </head>
 
 <body>
@@ -17,6 +45,7 @@
                 </li>
                 <li id="nav_contacts" style="cursor: pointer; padding: 10px;">Danh bạ</li>
             </ul>
+            
         </div>
 
         <!-- Chat Mode -->
@@ -78,26 +107,7 @@
                 <input type="text" id="search_contacts" placeholder="Search user by username">
             </div>
             <ul class="list_user" id="contacts_list"
-                style="padding: 10px; background-color: rgb(204, 94, 94); overflow-y: scroll; height: 90vh;">
-                <% accounts.forEach((account)=> { %>
-                    <li style="cursor: pointer;">
-                        <div style="display: flex;">
-                            <span>UserName: </span>
-                            <p>
-                                <%= account.username %>
-                            </p>
-                        </div>
-                        <div style="display: flex;">
-                            <span>FullName: </span>
-                            <p>
-                                <%= account.fullname %>
-                            </p>
-                        </div>
-                        <!-- Nút kết bạn sẽ được cập nhật dựa trên trạng thái bạn bè -->
-                        <button class="btn_add_friend" data-username="<%= account.username %>">Kết bạn</button>
-                    </li>
-                    <% }); %>
-            </ul>
+                style="padding: 10px; background-color: rgb(204, 94, 94); overflow-y: scroll; height: 90vh;"></ul>
         </div>
     </div>
 
@@ -131,7 +141,7 @@
     <script src="/socket.io/socket.io.js"></script>
     <script src="js/client.js"></script>
     <script>
-        // Sau khi DOM load, ẩn đi các phần tử trong danh sách group chat thuộc chính user
+        // Sau khi DOM load, ẩn đi phần checkbox của chính user trong modal tạo nhóm
         window.addEventListener("DOMContentLoaded", () => {
             const memberElements = document.querySelectorAll('.group-member');
             memberElements.forEach(elem => {

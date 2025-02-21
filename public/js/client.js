@@ -12,6 +12,7 @@ socket.emit("registerUser", myname);
 
 let currentRoom = localStorage.getItem("currentRoom") || null;
 let currentChatPartner = null;
+// activeChats lưu theo room, với mỗi entry: { partner, unread, isGroup }
 let activeChats = JSON.parse(localStorage.getItem("activeChats")) || {};
 
 const emotions = [
@@ -47,6 +48,8 @@ socket.on("connect", () => {
     if (currentRoom) {
         socket.emit("join", currentRoom);
     }
+    // Yêu cầu load tất cả cuộc trò chuyện của user
+    socket.emit("getUserConversations", myname);
 });
 
 socket.on("history", (data) => {
@@ -74,7 +77,6 @@ const sendMessage = () => {
     }
     const message = inputmessage.value;
     if (message === "") return;
-
     const obj = {
         id: Date.now(),
         name: myname,
@@ -93,10 +95,9 @@ inputmessage.addEventListener("keydown", (event) => {
 function appendMessage(obj) {
     const msgId = obj._id ? obj._id : obj.id;
     if (document.getElementById(msgId)) return;
-
     const li = document.createElement("li");
     li.innerHTML = `
-    <div class="sender-name" style="font-weight:bold; margin-bottom:2px;">${obj.name}</div>
+        <div class="sender-name" style="font-weight:bold; margin-bottom:2px;">${obj.name}</div>
         <span id="${msgId}">
             <p>${obj.message}</p>
         </span>
@@ -121,6 +122,7 @@ function saveMessage(messageObj) {
     }
 }
 
+// Xử lý nhận tin nhắn mới (thread)
 socket.on("thread", (data) => {
     const obj = JSON.parse(data);
     console.log("Thread received:", obj, "Current room:", currentRoom);
@@ -128,10 +130,16 @@ socket.on("thread", (data) => {
     if (obj.room === currentRoom) {
         appendMessage(obj);
     } else {
+        // Nếu tin nhắn đến từ phòng khác:
         if (activeChats[obj.room]) {
             activeChats[obj.room].unread = (activeChats[obj.room].unread || 0) + 1;
         } else {
-            activeChats[obj.room] = { partner: obj.name, unread: 1 };
+            // Tạo entry mới: nếu room chứa '_' thì là group chat, dùng obj.groupName nếu có
+            if (obj.room.indexOf('_') > -1) {
+                activeChats[obj.room] = { partner: obj.groupName ? obj.groupName : "Group Chat", unread: 1, isGroup: true };
+            } else {
+                activeChats[obj.room] = { partner: obj.name, unread: 1 };
+            }
         }
         localStorage.setItem("activeChats", JSON.stringify(activeChats));
         updateChatList();
@@ -139,26 +147,59 @@ socket.on("thread", (data) => {
     }
 });
 
+// Xử lý sự kiện "notification"
 socket.on("notification", (data) => {
-    // Log để debug
     console.log("Notification received:", data);
     const obj = JSON.parse(data.message);
     const roomNotified = data.room;
-    // Nếu bạn không đang ở trong phòng đó, cập nhật số tin chưa đọc
     if (roomNotified !== currentRoom) {
         if (activeChats[roomNotified]) {
-            // Nếu đã có thông tin (với partner là tên nhóm), chỉ tăng unread
             activeChats[roomNotified].unread = (activeChats[roomNotified].unread || 0) + 1;
         } else {
-            // Nếu chưa có entry, sử dụng groupName nếu có, nếu không fallback về obj.name
-            const partnerName = obj.groupName ? obj.groupName : obj.name;
-            activeChats[roomNotified] = { partner: partnerName, unread: 1 };
+            let partnerName = roomNotified.indexOf('_') > -1 ? (obj.groupName ? obj.groupName : "Group Chat") : obj.name;
+            activeChats[roomNotified] = { partner: partnerName, unread: 1, isGroup: roomNotified.indexOf('_') > -1 };
         }
         localStorage.setItem("activeChats", JSON.stringify(activeChats));
         updateChatList();
     }
 });
 
+// Khi nhận dữ liệu cuộc trò chuyện từ server, merge với activeChats để không mất các entry cũ
+socket.on("userConversations", (data) => {
+    const conversations = JSON.parse(data);
+    // Merge group chats
+    if (conversations.groupChats && conversations.groupChats.length > 0) {
+        conversations.groupChats.forEach(group => {
+            // Nếu entry chưa tồn tại, tạo mới; nếu đã tồn tại, chỉ cập nhật unread nếu có dữ liệu từ server
+            if (!activeChats[group.roomId]) {
+                activeChats[group.roomId] = {
+                    partner: group.groupName,
+                    unread: group.unread || 0,
+                    isGroup: true
+                };
+            } else {
+                // Giữ lại partner của group chat nếu đã được thiết lập
+                activeChats[group.roomId].unread = group.unread || activeChats[group.roomId].unread;
+            }
+        });
+    }
+    // Merge private chats
+    if (conversations.privateChats && conversations.privateChats.length > 0) {
+        conversations.privateChats.forEach(chat => {
+            const roomId = chat.roomId || chat.room;
+            if (!activeChats[roomId]) {
+                activeChats[roomId] = {
+                    partner: chat.friend,
+                    unread: chat.unread || 0
+                };
+            } else {
+                activeChats[roomId].unread = chat.unread || activeChats[roomId].unread;
+            }
+        });
+    }
+    localStorage.setItem("activeChats", JSON.stringify(activeChats));
+    updateChatList();
+});
 
 function updateChatList() {
     const chatListUl = document.getElementById("chat_list_ul");
@@ -170,7 +211,6 @@ function updateChatList() {
         chatItem.style.borderBottom = "1px solid #ddd";
         let partnerName = activeChats[room].partner;
         let unread = activeChats[room].unread || 0;
-
         chatItem.textContent = partnerName;
         if (unread > 0) {
             let badge = document.createElement("span");
@@ -207,7 +247,6 @@ listUser.forEach(item => {
         const usernameElement = item.querySelector('p');
         const targetUser = usernameElement.textContent.trim();
         if (targetUser === myname) return;
-
         const room = [myname, targetUser].sort().join('-');
         if (currentRoom && currentRoom !== room) {
             socket.emit('leave', currentRoom);
@@ -265,7 +304,6 @@ function choose(e, id, id_emotion) {
     emotionElem.style.borderRadius = "10px";
     emotionElem.style.padding = "3px";
     span_message.appendChild(emotionElem);
-
     const reactionData = {
         messageId: id,
         user: myname,
@@ -419,23 +457,20 @@ socket.on('respondFriendRequestResult', (data) => {
     }
 });
 
-const searchContactsInput = document.getElementById('search_contacts');
-if (searchContactsInput) {
-    searchContactsInput.addEventListener('input', () => {
-        const keyword = searchContactsInput.value.toLowerCase();
-        const contactItems = document.querySelectorAll('#contacts_list li');
-        contactItems.forEach(item => {
-            const username = item.querySelector('p').textContent.toLowerCase();
-            item.style.display = username.includes(keyword) ? "block" : "none";
-        });
-        updateContactButtons();
+const searchContactsInput = document.getElementById("search_contacts");
+searchContactsInput.addEventListener("input", function () {
+    const filter = searchContactsInput.value.toLowerCase();
+    const contactItems = document.querySelectorAll('#contacts_list li');
+    contactItems.forEach(item => {
+        const username = item.querySelector("p").textContent.toLowerCase();
+        item.style.display = username.indexOf(filter) > -1 ? "" : "none";
     });
-}
+    updateContactButtons();
+});
 
 /************************************
  * PHẦN 3: GROUP CHAT FUNCTIONALITY
  ************************************/
-// Xử lý mở/đóng modal tạo nhóm chat
 const btnCreateGroup = document.getElementById("btn_create_group");
 const groupModal = document.getElementById("groupModal");
 const closeModal = document.getElementById("closeModal");
@@ -458,7 +493,6 @@ createGroupBtn.addEventListener("click", () => {
         alert("Vui lòng nhập tên nhóm");
         return;
     }
-    // Lấy danh sách thành viên được chọn
     const checkboxes = document.querySelectorAll(".memberCheckbox");
     const members = [];
     checkboxes.forEach(chk => {
@@ -474,10 +508,9 @@ createGroupBtn.addEventListener("click", () => {
     groupModal.style.display = "none";
 });
 
-// Lắng nghe sự kiện nhận thông báo tạo group chat mới từ server
+// Nhận sự kiện "newGroupChat" từ server
 socket.on("newGroupChat", (data) => {
     const groupChat = JSON.parse(data);
-    // Nếu group chat chưa có trong danh sách, thêm vào activeChats với partner là tên nhóm
     if (!activeChats[groupChat.roomId]) {
         activeChats[groupChat.roomId] = { partner: groupChat.groupName, unread: 0, isGroup: true };
         localStorage.setItem("activeChats", JSON.stringify(activeChats));
@@ -486,4 +519,37 @@ socket.on("newGroupChat", (data) => {
     }
 });
 
+// Load danh sách cuộc trò chuyện khi đăng nhập
+socket.emit("getUserConversations", myname);
+socket.on("userConversations", (data) => {
+    const conversations = JSON.parse(data);
+    // Merge dữ liệu từ server vào activeChats mà không ghi đè các entry cũ
+    if (conversations.groupChats && conversations.groupChats.length > 0) {
+        conversations.groupChats.forEach(group => {
+            // Nếu đã có entry, giữ partner; nếu chưa, tạo mới
+            if (!activeChats[group.roomId]) {
+                activeChats[group.roomId] = { partner: group.groupName, unread: group.unread || 0, isGroup: true };
+            } else {
+                // Cập nhật unread nếu có
+                activeChats[group.roomId].unread = group.unread || activeChats[group.roomId].unread;
+            }
+        });
+    }
+    if (conversations.privateChats && conversations.privateChats.length > 0) {
+        conversations.privateChats.forEach(chat => {
+            const roomId = chat.roomId || chat.room;
+            if (!activeChats[roomId]) {
+                activeChats[roomId] = { partner: chat.friend, unread: chat.unread || 0 };
+            } else {
+                activeChats[roomId].unread = chat.unread || activeChats[roomId].unread;
+            }
+        });
+    }
+    localStorage.setItem("activeChats", JSON.stringify(activeChats));
+    updateChatList();
+});
 
+function renderUserConversations(conversations) {
+    // Nếu bạn muốn render riêng, bạn có thể gọi updateChatList()
+    updateChatList();
+}
