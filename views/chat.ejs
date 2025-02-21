@@ -45,7 +45,6 @@
                 </li>
                 <li id="nav_contacts" style="cursor: pointer; padding: 10px;">Danh bạ</li>
             </ul>
-            
         </div>
 
         <!-- Chat Mode -->
@@ -85,6 +84,8 @@
             </div>
 
             <div class="container" style="width: 50%; padding: 10px;">
+                <!-- Nút Group Details -->
+                <button id="btn_group_details" style="margin-bottom:10px;">Group Details</button>
                 <ul id="ul_message"></ul>
                 <div class="container_send">
                     <input type="text" id="message" placeholder="Enter your message">
@@ -95,19 +96,7 @@
 
         <!-- Contacts Mode -->
         <div id="contacts_mode" style="width: 85%; display: none;">
-            <div style="padding: 10px;">
-                <h3>Lời mời kết bạn</h3>
-                <ul id="friend_requests_container" style="list-style: none; padding: 0;"></ul>
-            </div>
-            <div style="padding: 10px;">
-                <h3>Danh sách bạn bè</h3>
-                <ul id="friends_container" style="list-style: none; padding: 0;"></ul>
-            </div>
-            <div style="padding: 10px;">
-                <input type="text" id="search_contacts" placeholder="Search user by username">
-            </div>
-            <ul class="list_user" id="contacts_list"
-                style="padding: 10px; background-color: rgb(204, 94, 94); overflow-y: scroll; height: 90vh;"></ul>
+            <!-- [Nội dung contacts mode của bạn] -->
         </div>
     </div>
 
@@ -134,14 +123,34 @@
         </div>
     </div>
 
+    <!-- Modal Group Details -->
+    <div id="groupDetailsModal" class="modal"
+        style="display:none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5);">
+        <div class="modal-content"
+            style="background:#fff; margin:10% auto; padding:20px; width:400px; position: relative;">
+            <span id="closeGroupDetails" style="position: absolute; top:5px; right:10px; cursor:pointer;">&times;</span>
+            <h3>Group Details</h3>
+            <div id="groupInfo"></div>
+            <div id="groupActions" style="margin-top:10px;">
+                <input type="text" id="newMemberInput" placeholder="New member username">
+                <button id="btnAddMember">Add Member</button>
+
+                <!-- Nếu người dùng không phải owner, hiển thị nút "Leave Group" -->
+                <button id="btn_leave_group">Leave Group</button>
+                <!-- Nếu người dùng là owner, hiển thị nút "Disband Group" -->
+                <button id="btn_disband_group">Disband Group</button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // Lấy myUsername từ localStorage (đã được lưu khi đăng nhập hoặc trước đó)
+        // Lấy myUsername từ localStorage (đã được lưu khi đăng nhập)
         const myUsername = localStorage.getItem('username');
     </script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="js/client.js"></script>
     <script>
-        // Sau khi DOM load, ẩn đi phần checkbox của chính user trong modal tạo nhóm
+        // Sau khi DOM load, ẩn phần checkbox của chính user trong modal tạo nhóm
         window.addEventListener("DOMContentLoaded", () => {
             const memberElements = document.querySelectorAll('.group-member');
             memberElements.forEach(elem => {

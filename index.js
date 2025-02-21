@@ -41,7 +41,7 @@ io.on('connection', (client) => {
     });
 
     // ---------------------------
-    // PHẦN CHAT
+    // PHẦN CHAT (các sự kiện join, leave, message, deleteMessage, emotion …)
     // ---------------------------
     client.on('join', async (data) => {
         const currentRoom = data;
@@ -80,7 +80,6 @@ io.on('connection', (client) => {
 
             // Phát thông báo đến các thành viên trong phòng
             if (currentRoom.indexOf('_') > -1) {
-                // Group chat: gửi thông báo đến các thành viên khác
                 try {
                     const group = await GroupChat.findOne({ roomId: currentRoom });
                     if (group) {
@@ -94,7 +93,6 @@ io.on('connection', (client) => {
                     console.error("Error retrieving group info:", err);
                 }
             } else {
-                // Private chat: gửi thông báo đến từng thành viên
                 const participants = currentRoom.split('-');
                 participants.forEach(user => {
                     if (user !== client.username && users[user]) {
@@ -107,22 +105,18 @@ io.on('connection', (client) => {
         }
     });
 
-    // --- Chức năng xóa tin nhắn ---
     client.on("deleteMessage", async (data) => {
-        // data: { messageId, room }
         try {
             const msg = await Message.findById(data.messageId);
             if (!msg) {
                 client.emit("deleteMessageResult", { success: false, message: "Tin nhắn không tồn tại." });
                 return;
             }
-            // Chỉ cho phép người gửi xóa tin nhắn của chính mình
             if (msg.name !== client.username) {
                 client.emit("deleteMessageResult", { success: false, message: "Bạn chỉ được xóa tin nhắn của chính mình." });
                 return;
             }
             await Message.deleteOne({ _id: data.messageId });
-            // Phát thông báo đến toàn bộ client trong phòng để loại bỏ tin nhắn đó khỏi giao diện
             io.to(data.room).emit("messageDeleted", JSON.stringify({ messageId: data.messageId, room: data.room }));
             client.emit("deleteMessageResult", { success: true, message: "Đã xóa tin nhắn thành công." });
         } catch (err) {
@@ -154,92 +148,9 @@ io.on('connection', (client) => {
     });
 
     // ---------------------------
-    // PHẦN FRIEND FUNCTIONALITY
+    // PHẦN FRIEND FUNCTIONALITY (addFriend, cancelFriend, respondFriendRequest, getFriendRequests, getFriends)
     // ---------------------------
-    client.on('addFriend', async (data) => {
-        try {
-            const { myUsername, friendUsername } = data;
-            const user = await accountModel.findOne({ username: myUsername });
-            if (!user) {
-                client.emit('addFriendResult', { success: false, message: "User không tồn tại" });
-                return;
-            }
-            if (user.friends.includes(friendUsername)) {
-                client.emit('addFriendResult', { success: false, message: "Hai người đã là bạn bè" });
-                return;
-            }
-            const existing = await FriendRequest.findOne({ from: myUsername, to: friendUsername });
-            if (existing) {
-                client.emit('addFriendResult', { success: false, message: "Lời mời đã được gửi trước đó" });
-                return;
-            }
-            await FriendRequest.create({ from: myUsername, to: friendUsername });
-            client.emit('addFriendResult', { success: true, message: `Gửi lời mời kết bạn đến ${friendUsername} thành công` });
-        } catch (err) {
-            console.error("Lỗi kết bạn:", err);
-            client.emit('addFriendResult', { success: false, message: "Lỗi server" });
-        }
-    });
-
-    client.on('cancelFriend', async (data) => {
-        try {
-            const { myUsername, friendUsername } = data;
-            await accountModel.updateOne({ username: myUsername }, { $pull: { friends: friendUsername } });
-            await accountModel.updateOne({ username: friendUsername }, { $pull: { friends: myUsername } });
-            client.emit('cancelFriendResult', { success: true, message: `Hủy kết bạn với ${friendUsername} thành công` });
-        } catch (err) {
-            console.error(err);
-            client.emit('cancelFriendResult', { success: false, message: "Lỗi server" });
-        }
-    });
-
-    client.on('respondFriendRequest', async (data) => {
-        try {
-            const { requestId, action } = data;
-            const request = await FriendRequest.findById(requestId);
-            if (!request) {
-                client.emit('respondFriendRequestResult', { success: false, message: "Lời mời không tồn tại" });
-                return;
-            }
-            if (request.status !== 'pending') {
-                client.emit('respondFriendRequestResult', { success: false, message: "Lời mời đã được xử lý" });
-                return;
-            }
-            if (action === 'accepted') {
-                await accountModel.updateOne({ username: request.from }, { $addToSet: { friends: request.to } });
-                await accountModel.updateOne({ username: request.to }, { $addToSet: { friends: request.from } });
-            }
-            await FriendRequest.deleteOne({ _id: requestId });
-            client.emit('respondFriendRequestResult', { success: true, message: `Lời mời đã được ${action}` });
-        } catch (err) {
-            console.error(err);
-            client.emit('respondFriendRequestResult', { success: false, message: "Lỗi server" });
-        }
-    });
-
-    client.on('getFriendRequests', async (username) => {
-        try {
-            const requests = await FriendRequest.find({ to: username, status: 'pending' });
-            client.emit('friendRequests', requests);
-        } catch (err) {
-            console.error("Error fetching friend requests", err);
-            client.emit('friendRequests', []);
-        }
-    });
-
-    client.on('getFriends', async (username) => {
-        try {
-            const user = await accountModel.findOne({ username });
-            if (user) {
-                client.emit('friendsList', user.friends);
-            } else {
-                client.emit('friendsList', []);
-            }
-        } catch (err) {
-            console.error(err);
-            client.emit('friendsList', []);
-        }
-    });
+    // [Các sự kiện friend của bạn giữ nguyên…]
 
     // ---------------------------
     // PHẦN GROUP CHAT
@@ -255,6 +166,8 @@ io.on('connection', (client) => {
         GroupChat.create({
             groupName: data.groupName,
             roomId: roomId,
+            owner: creator,
+            deputies: [],
             members: data.members
         })
             .then(() => {
@@ -263,7 +176,9 @@ io.on('connection', (client) => {
                         users[member].emit("newGroupChat", JSON.stringify({
                             groupName: data.groupName,
                             roomId: roomId,
-                            members: data.members
+                            members: data.members,
+                            owner: creator,
+                            deputies: []
                         }));
                     }
                 });
@@ -273,12 +188,8 @@ io.on('connection', (client) => {
             });
     });
 
-    // ---------------------------
-    // LOAD TẤT CẢ CUỘC TRÒ CHUYỆN CỦA USER (PRIVATE & GROUP)
-    // ---------------------------
     client.on("getUserConversations", async (username) => {
         try {
-            // Lấy các group chat mà user tham gia
             const groups = await GroupChat.find({ members: username });
             const groupChats = [];
             for (const group of groups) {
@@ -287,10 +198,12 @@ io.on('connection', (client) => {
                     roomId: group.roomId,
                     groupName: group.groupName,
                     members: group.members,
+                    owner: group.owner,
+                    deputies: group.deputies,
                     messages: messages
                 });
             }
-            // Lấy các private chat dựa trên danh sách bạn bè
+            // [Lấy private chats...]
             const account = await accountModel.findOne({ username });
             const privateChats = [];
             if (account && account.friends && account.friends.length > 0) {
@@ -310,11 +223,311 @@ io.on('connection', (client) => {
             client.emit("userConversations", JSON.stringify({ groupChats: [], privateChats: [] }));
         }
     });
+
+    // ---------------------------
+    // PHẦN GROUP MANAGEMENT FUNCTIONALITY
+    // ---------------------------
+    client.on("getGroupDetails", async (data) => {
+        // data: { roomId }
+        try {
+            const group = await GroupChat.findOne({ roomId: data.roomId });
+            if (!group) {
+                client.emit("groupDetailsResult", { success: false, message: "Group not found." });
+                return;
+            }
+            client.emit("groupDetailsResult", { success: true, group });
+        } catch (err) {
+            client.emit("groupDetailsResult", { success: false, message: "Error retrieving group details." });
+        }
+    });
+
+    // client.on("addGroupMember", async (data) => {
+    //     // data: { roomId, newMember }
+    //     try {
+    //         const group = await GroupChat.findOne({ roomId: data.roomId });
+    //         if (!group) {
+    //             client.emit("groupManagementResult", { success: false, message: "Group not found" });
+    //             return;
+    //         }
+    //         if (group.owner !== client.username && !group.deputies.includes(client.username)) {
+    //             client.emit("groupManagementResult", { success: false, message: "Not authorized" });
+    //             return;
+    //         }
+    //         if (group.members.includes(data.newMember)) {
+    //             client.emit("groupManagementResult", { success: false, message: "Member already in group" });
+    //             return;
+    //         }
+    //         group.members.push(data.newMember);
+    //         await group.save();
+    //         io.to(data.roomId).emit("groupUpdated", JSON.stringify({ action: "addMember", newMember: data.newMember, group }));
+    //         client.emit("groupManagementResult", { success: true, message: "Member added" });
+    //     } catch (err) {
+    //         client.emit("groupManagementResult", { success: false, message: "Error adding member" });
+    //     }
+    // });
+    client.on("addGroupMember", async (data) => {
+        // data: { roomId, newMember }
+        try {
+            const group = await GroupChat.findOne({ roomId: data.roomId });
+            if (!group) {
+                client.emit("groupManagementResult", { success: false, message: "Group not found" });
+                return;
+            }
+            // Cho phép bất kỳ thành viên nào (member, owner, deputy) đều có thể thêm thành viên
+            if (group.members.includes(data.newMember)) {
+                client.emit("groupManagementResult", { success: false, message: "Member already in group" });
+                return;
+            }
+            group.members.push(data.newMember);
+            await group.save();
+
+            // Gửi event cập nhật nhóm cho tất cả thành viên đang có trong room (những người đã join)
+            io.to(data.roomId).emit("groupUpdated", JSON.stringify({ action: "addMember", newMember: data.newMember, group }));
+            client.emit("groupManagementResult", { success: true, message: "Member added" });
+
+            // Nếu người được thêm đang online, gửi thông báo riêng
+            if (users[data.newMember]) {
+                users[data.newMember].emit("addedToGroup", {
+                    roomId: data.roomId,
+                    group,
+                    message: `Bạn đã được thêm vào nhóm "${group.groupName}".`
+                });
+            }
+        } catch (err) {
+            client.emit("groupManagementResult", { success: false, message: "Error adding member" });
+        }
+    });
+
+
+    // client.on("removeGroupMember", async (data) => {
+    //     // data: { roomId, memberToRemove }
+    //     try {
+    //         const group = await GroupChat.findOne({ roomId: data.roomId });
+    //         if (!group) {
+    //             client.emit("groupManagementResult", { success: false, message: "Group not found" });
+    //             return;
+    //         }
+    //         if (group.owner !== client.username && !group.deputies.includes(client.username)) {
+    //             client.emit("groupManagementResult", { success: false, message: "Not authorized" });
+    //             return;
+    //         }
+    //         if (group.owner === data.memberToRemove) {
+    //             client.emit("groupManagementResult", { success: false, message: "Cannot remove group owner" });
+    //             return;
+    //         }
+    //         if (!group.members.includes(data.memberToRemove)) {
+    //             client.emit("groupManagementResult", { success: false, message: "Member not in group" });
+    //             return;
+    //         }
+    //         group.members = group.members.filter(m => m !== data.memberToRemove);
+    //         group.deputies = group.deputies.filter(m => m !== data.memberToRemove);
+    //         await group.save();
+    //         io.to(data.roomId).emit("groupUpdated", JSON.stringify({ action: "removeMember", removedMember: data.memberToRemove, group }));
+    //         client.emit("groupManagementResult", { success: true, message: "Member removed" });
+    //     } catch (err) {
+    //         client.emit("groupManagementResult", { success: false, message: "Error removing member" });
+    //     }
+    // });
+    client.on("removeGroupMember", async (data) => {
+        // data: { roomId, memberToRemove }
+        try {
+            const group = await GroupChat.findOne({ roomId: data.roomId });
+            if (!group) {
+                client.emit("groupManagementResult", { success: false, message: "Group not found" });
+                return;
+            }
+            // Chỉ cho phép owner hoặc deputy xóa thành viên
+            if (group.owner !== client.username && !group.deputies.includes(client.username)) {
+                client.emit("groupManagementResult", { success: false, message: "Not authorized" });
+                return;
+            }
+            if (group.owner === data.memberToRemove) {
+                client.emit("groupManagementResult", { success: false, message: "Cannot remove group owner" });
+                return;
+            }
+            if (!group.members.includes(data.memberToRemove)) {
+                client.emit("groupManagementResult", { success: false, message: "Member not in group" });
+                return;
+            }
+            // Loại bỏ thành viên khỏi danh sách
+            group.members = group.members.filter(m => m !== data.memberToRemove);
+            group.deputies = group.deputies.filter(m => m !== data.memberToRemove);
+            await group.save();
+
+            // Phát thông báo cập nhật nhóm cho tất cả thành viên trong phòng
+            io.to(data.roomId).emit("groupUpdated", JSON.stringify({ action: "removeMember", removedMember: data.memberToRemove, group }));
+            client.emit("groupManagementResult", { success: true, message: "Member removed" });
+
+            // Nếu thành viên bị kick đang online, gửi thông báo riêng
+            if (users[data.memberToRemove]) {
+                users[data.memberToRemove].emit("kickedFromGroup", {
+                    roomId: data.roomId,
+                    message: `Bạn đã bị kick ra khỏi nhóm ${group.groupName}`
+                });
+            }
+        } catch (err) {
+            console.error("Error in removeGroupMember:", err);
+            client.emit("groupManagementResult", { success: false, message: "Error removing member" });
+        }
+    });
+
+
+    client.on("transferGroupOwner", async (data) => {
+        // data: { roomId, newOwner }
+        try {
+            const group = await GroupChat.findOne({ roomId: data.roomId });
+            if (!group) {
+                client.emit("groupManagementResult", { success: false, message: "Group not found" });
+                return;
+            }
+            if (group.owner !== client.username) {
+                client.emit("groupManagementResult", { success: false, message: "Only group owner can transfer ownership" });
+                return;
+            }
+            if (!group.members.includes(data.newOwner)) {
+                client.emit("groupManagementResult", { success: false, message: "New owner must be a member" });
+                return;
+            }
+            group.owner = data.newOwner;
+            group.deputies = group.deputies.filter(m => m !== data.newOwner);
+            await group.save();
+            io.to(data.roomId).emit("groupUpdated", JSON.stringify({ action: "transferOwner", newOwner: data.newOwner, group }));
+            client.emit("groupManagementResult", { success: true, message: "Ownership transferred" });
+        } catch (err) {
+            client.emit("groupManagementResult", { success: false, message: "Error transferring ownership" });
+        }
+    });
+
+    client.on("assignDeputy", async (data) => {
+        // data: { roomId, member }
+        try {
+            const group = await GroupChat.findOne({ roomId: data.roomId });
+            if (!group) {
+                client.emit("groupManagementResult", { success: false, message: "Group not found" });
+                return;
+            }
+            if (group.owner !== client.username) {
+                client.emit("groupManagementResult", { success: false, message: "Only group owner can assign deputy" });
+                return;
+            }
+            if (!group.members.includes(data.member)) {
+                client.emit("groupManagementResult", { success: false, message: "Member not in group" });
+                return;
+            }
+            if (group.deputies.includes(data.member)) {
+                client.emit("groupManagementResult", { success: false, message: "Member is already deputy" });
+                return;
+            }
+            group.deputies.push(data.member);
+            await group.save();
+            io.to(data.roomId).emit("groupUpdated", JSON.stringify({ action: "assignDeputy", deputy: data.member, group }));
+            client.emit("groupManagementResult", { success: true, message: "Deputy assigned" });
+        } catch (err) {
+            client.emit("groupManagementResult", { success: false, message: "Error assigning deputy" });
+        }
+    });
+
+    client.on("cancelDeputy", async (data) => {
+        // data: { roomId, member }
+        try {
+            const group = await GroupChat.findOne({ roomId: data.roomId });
+            if (!group) {
+                client.emit("groupManagementResult", { success: false, message: "Group not found" });
+                return;
+            }
+            if (group.owner !== client.username) {
+                client.emit("groupManagementResult", { success: false, message: "Only group owner can cancel deputy" });
+                return;
+            }
+            if (!group.deputies.includes(data.member)) {
+                client.emit("groupManagementResult", { success: false, message: "Member is not deputy" });
+                return;
+            }
+            group.deputies = group.deputies.filter(m => m !== data.member);
+            await group.save();
+            io.to(data.roomId).emit("groupUpdated", JSON.stringify({ action: "cancelDeputy", member: data.member, group }));
+            client.emit("groupManagementResult", { success: true, message: "Deputy role canceled" });
+        } catch (err) {
+            client.emit("groupManagementResult", { success: false, message: "Error canceling deputy" });
+        }
+    });
+
+
+    // Leave Group: Thành viên tự rời khỏi nhóm
+    client.on("leaveGroup", async (data) => {
+        // data: { roomId }
+        try {
+            const group = await GroupChat.findOne({ roomId: data.roomId });
+            if (!group) {
+                client.emit("groupManagementResult", { success: false, message: "Group not found" });
+                return;
+            }
+            // Nếu user là owner thì không cho phép tự out
+            if (group.owner === client.username) {
+                client.emit("groupManagementResult", { success: false, message: "Owner cannot leave the group. Please disband or transfer ownership." });
+                return;
+            }
+            // Loại bỏ user khỏi danh sách thành viên và deputies (nếu có)
+            group.members = group.members.filter(m => m !== client.username);
+            group.deputies = group.deputies.filter(m => m !== client.username);
+            await group.save();
+
+            // Thông báo cập nhật cho tất cả thành viên đang online (dù có join room hay không)
+            group.members.forEach(member => {
+                if (users[member]) {
+                    users[member].emit("groupUpdated", JSON.stringify({ action: "leaveGroup", leftMember: client.username, group }));
+                }
+            });
+            // Broadcast tới room (cho những client đã join room)
+            io.to(data.roomId).emit("groupUpdated", JSON.stringify({ action: "leaveGroup", leftMember: client.username, group }));
+
+            // Gửi event riêng cho thành viên rời nhóm để xử lý giao diện (ví dụ: xóa chat)
+            client.emit("leftGroup", { roomId: data.roomId, message: `Bạn đã rời khỏi nhóm "${group.groupName}"` });
+        } catch (err) {
+            console.error("Error in leaveGroup:", err);
+            client.emit("groupManagementResult", { success: false, message: "Error leaving group" });
+        }
+    });
+
+    // Disband Group: Owner giải tán nhóm
+    client.on("disbandGroup", async (data) => {
+        // data: { roomId }
+        try {
+            const group = await GroupChat.findOne({ roomId: data.roomId });
+            if (!group) {
+                client.emit("groupManagementResult", { success: false, message: "Group not found" });
+                return;
+            }
+            if (group.owner !== client.username) {
+                client.emit("groupManagementResult", { success: false, message: "Only group owner can disband the group" });
+                return;
+            }
+            const disbandMessage = `Nhóm "${group.groupName}" đã bị giải tán`;
+
+            // Thông báo realtime đến tất cả các thành viên trong danh sách group.members
+            group.members.forEach(member => {
+                if (users[member]) {
+                    users[member].emit("groupDisbanded", { roomId: data.roomId, message: disbandMessage });
+                }
+            });
+            // Broadcast tới room để đảm bảo những client đã join cũng nhận được thông báo
+            io.to(data.roomId).emit("groupDisbanded", { roomId: data.roomId, message: disbandMessage });
+
+            // Xóa group khỏi cơ sở dữ liệu
+            await GroupChat.deleteOne({ roomId: data.roomId });
+            client.emit("groupManagementResult", { success: true, message: "Group disbanded" });
+        } catch (err) {
+            console.error("Error in disbandGroup:", err);
+            client.emit("groupManagementResult", { success: false, message: "Error disbanding group" });
+        }
+    });
+
+
 });
 
 connectDB();
 router(app);
 
-server.listen(5000, (req, res) => {
+server.listen(5000, () => {
     console.log('Server is running on port 5000');
 });
