@@ -336,7 +336,6 @@ io.on('connection', (client) => {
                 client.emit("groupManagementResult", { success: false, message: "Group not found" });
                 return;
             }
-            // Chỉ cho phép owner hoặc deputy xóa thành viên
             if (group.owner !== client.username && !group.deputies.includes(client.username)) {
                 client.emit("groupManagementResult", { success: false, message: "Not authorized" });
                 return;
@@ -349,20 +348,21 @@ io.on('connection', (client) => {
                 client.emit("groupManagementResult", { success: false, message: "Member not in group" });
                 return;
             }
-            // Loại bỏ thành viên khỏi danh sách
+            // Cập nhật danh sách thành viên
             group.members = group.members.filter(m => m !== data.memberToRemove);
             group.deputies = group.deputies.filter(m => m !== data.memberToRemove);
             await group.save();
 
-            // Phát thông báo cập nhật nhóm cho tất cả thành viên trong phòng
+            // Thông báo realtime cho tất cả client trong room
             io.to(data.roomId).emit("groupUpdated", JSON.stringify({ action: "removeMember", removedMember: data.memberToRemove, group }));
             client.emit("groupManagementResult", { success: true, message: "Member removed" });
 
-            // Nếu thành viên bị kick đang online, gửi thông báo riêng
+            // Nếu người bị remove đang online, rời khỏi room và gửi thông báo riêng
             if (users[data.memberToRemove]) {
+                users[data.memberToRemove].leave(data.roomId);
                 users[data.memberToRemove].emit("kickedFromGroup", {
                     roomId: data.roomId,
-                    message: `Bạn đã bị kick ra khỏi nhóm ${group.groupName}`
+                    message: `Bạn đã bị loại khỏi nhóm "${group.groupName}"`
                 });
             }
         } catch (err) {
@@ -370,6 +370,7 @@ io.on('connection', (client) => {
             client.emit("groupManagementResult", { success: false, message: "Error removing member" });
         }
     });
+
 
 
     client.on("transferGroupOwner", async (data) => {
@@ -455,39 +456,39 @@ io.on('connection', (client) => {
 
     // Leave Group: Thành viên tự rời khỏi nhóm
     client.on("leaveGroup", async (data) => {
-        // data: { roomId }
         try {
             const group = await GroupChat.findOne({ roomId: data.roomId });
             if (!group) {
                 client.emit("groupManagementResult", { success: false, message: "Group not found" });
                 return;
             }
-            // Nếu user là owner thì không cho phép tự out
             if (group.owner === client.username) {
                 client.emit("groupManagementResult", { success: false, message: "Owner cannot leave the group. Please disband or transfer ownership." });
                 return;
             }
-            // Loại bỏ user khỏi danh sách thành viên và deputies (nếu có)
             group.members = group.members.filter(m => m !== client.username);
             group.deputies = group.deputies.filter(m => m !== client.username);
             await group.save();
 
-            // Thông báo cập nhật cho tất cả thành viên đang online (dù có join room hay không)
+            // Rời khỏi room chat
+            client.leave(data.roomId);
+
+            // Thông báo cho toàn bộ thành viên trong room
             group.members.forEach(member => {
                 if (users[member]) {
                     users[member].emit("groupUpdated", JSON.stringify({ action: "leaveGroup", leftMember: client.username, group }));
                 }
             });
-            // Broadcast tới room (cho những client đã join room)
             io.to(data.roomId).emit("groupUpdated", JSON.stringify({ action: "leaveGroup", leftMember: client.username, group }));
 
-            // Gửi event riêng cho thành viên rời nhóm để xử lý giao diện (ví dụ: xóa chat)
+            // Gửi event riêng cho người rời nhóm
             client.emit("leftGroup", { roomId: data.roomId, message: `Bạn đã rời khỏi nhóm "${group.groupName}"` });
         } catch (err) {
             console.error("Error in leaveGroup:", err);
             client.emit("groupManagementResult", { success: false, message: "Error leaving group" });
         }
     });
+
 
     // Disband Group: Owner giải tán nhóm
     client.on("disbandGroup", async (data) => {
