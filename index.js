@@ -47,6 +47,11 @@ io.on('connection', (client) => {
         const currentRoom = data;
         client.join(currentRoom);
         try {
+            // Cập nhật "lastRead" cho user khi join phòng:
+            await accountModel.updateOne(
+                { username: client.username },
+                { $set: { [`lastRead.${currentRoom}`]: new Date() } }
+            );
             const history = await Message.find({ room: currentRoom }).sort({ createdAt: 1 });
             client.emit("history", JSON.stringify(history));
             const reactions = await Reaction.find({ room: currentRoom }).sort({ createdAt: 1 });
@@ -84,7 +89,6 @@ io.on('connection', (client) => {
             // Phân biệt xử lý thông báo:
             if (currentRoom.indexOf('_') > -1) {
                 // Đây là group chat.
-                // Sử dụng async/await để lấy thông tin nhóm từ DB
                 try {
                     const group = await GroupChat.findOne({ roomId: currentRoom });
                     if (group) {
@@ -136,6 +140,7 @@ io.on('connection', (client) => {
 
     // ---------------------------
     // PHẦN FRIEND FUNCTIONALITY
+    // (Các sự kiện friend giữ nguyên)
     // ---------------------------
     client.on('addFriend', async (data) => {
         try {
@@ -187,11 +192,9 @@ io.on('connection', (client) => {
                 return;
             }
             if (action === 'accepted') {
-                // Cập nhật danh sách bạn của cả 2 user
                 await accountModel.updateOne({ username: request.from }, { $addToSet: { friends: request.to } });
                 await accountModel.updateOne({ username: request.to }, { $addToSet: { friends: request.from } });
             }
-            // Xóa luôn lời mời kết bạn sau khi trả lời (dù là accepted hay rejected)
             await FriendRequest.deleteOne({ _id: requestId });
             client.emit('respondFriendRequestResult', { success: true, message: `Lời mời đã được ${action}` });
         } catch (err) {

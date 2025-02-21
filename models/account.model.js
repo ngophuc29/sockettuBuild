@@ -14,10 +14,16 @@ const accountSchema = mongoose.Schema({
         type: String,
         required: true
     },
-    // Thêm trường lưu danh sách friend
+    // Lưu danh sách bạn bè
     friends: {
         type: [String],
         default: []
+    },
+    // Lưu trạng thái tin nhắn đã đọc theo room (key: roomId, value: timestamp)
+    lastRead: {
+        type: Map,
+        of: Date,
+        default: {}
     }
 },
     {
