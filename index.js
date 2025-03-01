@@ -83,7 +83,8 @@ io.on('connection', (client) => {
             const newMessage = await Message.create({
                 name: messageObj.name,
                 message: messageObj.message,
-                room: currentRoom
+                room: currentRoom,
+                fileUrl: messageObj.fileUrl // Nếu không có, sẽ lưu undefined
             });
             messageObj._id = newMessage._id;
             io.to(currentRoom).emit("thread", JSON.stringify(messageObj));
