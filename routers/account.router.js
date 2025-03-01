@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {
- login,register
+ login,register,getAccounts
 }= require('../controllers/account.controller')
 
 
@@ -12,4 +12,5 @@ router
 router
     .route("/register")
     .post(register)
+router.route("/").get(getAccounts);  // Thêm route này
 module.exports = router; 

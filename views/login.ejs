@@ -1,114 +1,118 @@
-<div  >
-
-    <caption>
-        <h1>Login </h1>
-    </caption>
-    <input type="text" name="username" id="ip_username" placeholder="Username" required>
-    <input type="password" name="password" id="ip_password" placeholder="Password" required>
-    <button id="btn_login">Dang Nhap</button>  
-
-</div>
-
+<!-- Form Login -->
 <div>
-
     <caption>
-        <h1>Dang ky </h1>
+        <h1>Login</h1>
     </caption>
-    <input type="text" name="username2" id="ip_username2" placeholder="Username" required>
-    <input type="password" name="password2" id="ip_password2" placeholder="Password" required>
-    <input type="password" name="password22" id="ip_password22" placeholder="nhap lai Password" required>
-    <input type="text" name="username2" id="ip_fullname" placeholder="Nhap ho va ten" required>
-
-    <button id="btn_register">Dang Nhap</button>
-
+    <!-- Nếu dùng đăng nhập bằng phone, nhập phone; nếu không, dùng username -->
+    <input type="text" name="username" id="ip_username" placeholder="Username (optional if using phone)">
+    <input type="text" name="phone" id="ip_phone" placeholder="Phone Number (optional)">
+    <input type="password" name="password" id="ip_password" placeholder="Password" required>
+    <button id="btn_login">Login</button>
 </div>
-<script >
 
-    //dang nhap
+<!-- Form Register -->
+<div>
+    <caption>
+        <h1>Register</h1>
+    </caption>
+    <!-- Bao gồm các trường bắt buộc: Username, Phone Number, Password, Confirm Password và Full Name -->
+    <input type="text" name="username2" id="ip_username2" placeholder="Username" required>
+    <input type="text" name="phone2" id="ip_phone2" placeholder="Phone Number" required>
+    <input type="password" name="password2" id="ip_password2" placeholder="Password" required>
+    <input type="password" name="password22" id="ip_password22" placeholder="Confirm Password" required>
+    <input type="text" name="fullname" id="ip_fullname" placeholder="Full Name" required>
+    <button id="btn_register">Register</button>
+</div>
+
+<script>
+    // Login
     const btn_login = document.getElementById("btn_login");
     const ip_username = document.getElementById("ip_username");
+    const ip_phone = document.getElementById("ip_phone");
     const ip_password = document.getElementById("ip_password");
 
-    btn_login.addEventListener("click",()=>{
+    btn_login.addEventListener("click", () => {
         const username = ip_username.value;
+        const phone = ip_phone.value;
         const password = ip_password.value;
-        const data = {
-            username: username,
-            password: password
+        const data = { password };
+
+        // Nếu nhập số điện thoại thì dùng phone, ngược lại dùng username
+        if (phone.trim()) {
+            data.phone = phone;
+        } else {
+            data.username = username;
         }
-        
-        fetch('/api/accounts/login',{
+
+        fetch('/api/accounts/login', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
-
             },
-            body: JSON.stringify(data) 
+            body: JSON.stringify(data)
         })
-        .then(res=>res.json())
-        .then(result=>{
-            // alert(JSON.stringify(result))
-            if(result.statusCode){
-                alert(result.message)
-            }else{
-                localStorage.setItem('username',result.username)
-                
-
-                window.location = "/chat"
-            }
-        })
-        .catch(error =>{
-            alert("Co loi xay ra" + error.message)
-        })
-    })
+            .then(res => res.json())
+            .then(result => {
+                if (result.statusCode) {
+                    alert(result.message);
+                } else {
+                    localStorage.setItem('username', result.username);
+                    window.location = "/chat";
+                }
+            })
+            .catch(error => {
+                alert("Error: " + error.message);
+            });
+    });
 </script>
 
 <script>
-    //dang ky
+    // Register
     const btn_register = document.getElementById("btn_register");
     const ip_username2 = document.getElementById("ip_username2");
+    const ip_phone2 = document.getElementById("ip_phone2");
     const ip_password2 = document.getElementById("ip_password2");
     const ip_password22 = document.getElementById("ip_password22");
     const ip_fullname = document.getElementById("ip_fullname");
 
-    btn_register.addEventListener('click',()=>{
+    btn_register.addEventListener('click', () => {
         const username = ip_username2.value;
+        const phone = ip_phone2.value;
         const password = ip_password2.value;
         const password2 = ip_password22.value;
         const fullname = ip_fullname.value;
 
-        if(password != password2){
-            alert("Password khong trung nhau")
+        if (password !== password2) {
+            alert("Passwords do not match");
             return;
         }
 
         const data = {
             username: username,
+            phone: phone,
             password: password,
             fullname: fullname
-        }
+        };
 
         fetch('/api/accounts/register', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
-
             },
             body: JSON.stringify(data)
         })
             .then(res => res.json())
             .then(result => {
-                // alert(JSON.stringify(result))
                 if (result.statusCode) {
-                    alert(result.message)
+                    alert(result.message);
                 } else {
-                    alert("Dang ky thanh cong ,Hay dang nhap")
+                    alert("Registration successful, please login");
                 }
             })
             .catch(error => {
-                alert("Co loi xay ra" + error.message)
-            })
-    })
+                alert("Error: " + error.message);
+            });
+    });
 </script>

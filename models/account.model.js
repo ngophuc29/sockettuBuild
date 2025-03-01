@@ -14,21 +14,23 @@ const accountSchema = mongoose.Schema({
         type: String,
         required: true
     },
-    // Lưu danh sách bạn bè
+    phone: {                   // <-- Trường phone đã được thêm
+        type: String,
+        required: true,
+        unique: true
+    },
     friends: {
         type: [String],
         default: []
     },
-    // Lưu trạng thái tin nhắn đã đọc theo room (key: roomId, value: timestamp)
     lastRead: {
         type: Map,
         of: Date,
         default: {}
     }
-},
-    {
-        versionKey: false,
-        timestamps: true
-    });
+}, {
+    versionKey: false,
+    timestamps: true
+});
 
 module.exports = mongoose.model('account', accountSchema);
