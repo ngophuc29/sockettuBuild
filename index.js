@@ -34,7 +34,8 @@ app.set("views", 'views');
 
 // Object lưu các socket của user (key là username)
 const users = {};
-
+// Map lưu trạng thái đang gọi của từng user
+const usersInCall = {};
 io.on('connection', (client) => {
     console.log('a user connected');
 
@@ -42,11 +43,13 @@ io.on('connection', (client) => {
     client.on("registerUser", (username) => {
         users[username] = client;
         client.username = username;
+        console.log(`[REGISTER] ${username} → ${client.id}`);
     });
 
     client.on("disconnect", () => {
         if (client.username) {
             delete users[client.username];
+            delete usersInCall[client.username];
         }
     });
 
@@ -571,6 +574,65 @@ io.on('connection', (client) => {
             client.emit("groupManagementResult", { success: false, message: "Error disbanding group" });
         }
     });
+    
+
+    // ---------------------------
+    //    SIGNALING CHO CALL
+    // ---------------------------
+    // A gọi B: gửi SDP offer
+    client.on("callUser", ({ userToCall, signalData, from }) => {
+        const callee = users[userToCall];
+        if (!callee) {
+            client.emit("callError", { message: "Người nhận không online." });
+            return;
+        }
+        if (usersInCall[userToCall]) {
+            client.emit("callError", { message: "Người nhận đang bận." });
+            return;
+        }
+        // Đánh dấu cả 2 đang trong call
+        usersInCall[from] = true;
+        usersInCall[userToCall] = true;
+        callee.emit("callIncoming", { from, signal: signalData });
+    });
+
+    // B chấp nhận cuộc gọi: gửi SDP answer về A
+    client.on("acceptCall", ({ to, signal }) => {
+        const caller = users[to];
+        if (caller) {
+            caller.emit("callAccepted", { signal });
+        }
+    });
+
+    // B từ chối cuộc gọi
+    client.on("rejectCall", ({ to }) => {
+        const caller = users[to];
+        if (caller) {
+            caller.emit("callRejected");
+        }
+        // Giải phóng trạng thái gọi
+        delete usersInCall[to];
+        delete usersInCall[client.username];
+    });
+
+    // Relay ICE candidates
+    client.on("iceCandidate", ({ to, candidate }) => {
+        const peerSocket = users[to];
+        if (peerSocket) {
+            peerSocket.emit("iceCandidate", { candidate });
+        }
+    });
+
+    // Kết thúc cuộc gọi
+    client.on("endCall", ({ to }) => {
+        const peerSocket = users[to];
+        if (peerSocket) {
+            peerSocket.emit("callEnded");
+        }
+        delete usersInCall[to];
+        delete usersInCall[client.username];
+    });
+    // ---------------------------
 });
 
 connectDB();
