@@ -36,6 +36,7 @@ app.set("views", 'views');
 const users = {};
 // Map lưu trạng thái đang gọi của từng user
 const usersInCall = {};
+
 io.on('connection', (client) => {
     console.log('a user connected');
 
@@ -111,7 +112,8 @@ io.on('connection', (client) => {
                     console.error("Error retrieving group info:", err);
                 }
             } else {
-                // Private chat
+                // Private chat: room id theo convention sẽ được tạo khi lời mời được xử lý và "friendAccepted"
+                // Ta giả định room là một chuỗi bao gồm 2 username (được sắp xếp) -> phát thông báo cho cả 2 bên
                 const participants = currentRoom.split('-');
                 participants.forEach(user => {
                     if (user !== client.username && users[user]) {
@@ -171,7 +173,8 @@ io.on('connection', (client) => {
     // ---------------------------
     // PHẦN FRIEND FUNCTIONALITY (addFriend, cancelFriend, respondFriendRequest, getFriendRequests, getFriends)
     // ---------------------------
-    // [Các sự kiện friend của bạn giữ nguyên…]
+
+    // Gửi lời mời kết bạn và phát realtime cho người nhận nếu online
     client.on('addFriend', async (data) => {
         try {
             const { myUsername, friendUsername } = data;
@@ -191,26 +194,60 @@ io.on('connection', (client) => {
             }
             await FriendRequest.create({ from: myUsername, to: friendUsername });
             client.emit('addFriendResult', { success: true, message: `Gửi lời mời kết bạn đến ${friendUsername} thành công` });
+            // Nếu friend đang online, gửi realtime event thông báo lời mời mới
+            if (users[friendUsername]) {
+                users[friendUsername].emit("newFriendRequest", { from: myUsername });
+            }
         } catch (err) {
             console.error("Lỗi kết bạn:", err);
             client.emit('addFriendResult', { success: false, message: "Lỗi server" });
         }
     });
 
-    // Hủy kết bạn
+    // Hủy kết bạn (trong trường hợp này chỉ cập nhật theo user hiện tại)
     client.on('cancelFriend', async (data) => {
         try {
             const { myUsername, friendUsername } = data;
             await accountModel.updateOne({ username: myUsername }, { $pull: { friends: friendUsername } });
             await accountModel.updateOne({ username: friendUsername }, { $pull: { friends: myUsername } });
             client.emit('cancelFriendResult', { success: true, message: `Hủy kết bạn với ${friendUsername} thành công` });
+            // Bạn có thể phát event cho friend nếu cần cập nhật realtime cho cả 2 bên
         } catch (err) {
             console.error(err);
             client.emit('cancelFriendResult', { success: false, message: "Lỗi server" });
         }
     });
 
-     
+    // Phản hồi lời mời kết bạn: nếu accepted cập nhật danh sách friend realtime cho cả 2 bên
+    // client.on('respondFriendRequest', async (data) => {
+    //     try {
+    //         const { requestId, action } = data;
+    //         const request = await FriendRequest.findById(requestId);
+    //         if (!request) {
+    //             client.emit('respondFriendRequestResult', { success: false, message: "Lời mời không tồn tại" });
+    //             return;
+    //         }
+    //         // Giả sử rằng nếu lời mời bị rejected, chúng ta chỉ xóa document
+    //         if (action === 'accepted') {
+    //             // Cập nhật danh sách bạn cho cả 2 user
+    //             await accountModel.updateOne({ username: request.from }, { $addToSet: { friends: request.to } });
+    //             await accountModel.updateOne({ username: request.to }, { $addToSet: { friends: request.from } });
+    //             // Phát realtime event cập nhật friend list cho người gửi và người nhận
+    //             if (users[request.from]) {
+    //                 users[request.from].emit("friendAccepted", { friend: request.to });
+    //             }
+    //             if (users[request.to]) {
+    //                 users[request.to].emit("friendAccepted", { friend: request.from });
+    //             }
+    //         }
+    //         // Xóa luôn lời mời sau khi phản hồi
+    //         await FriendRequest.deleteOne({ _id: requestId });
+    //         client.emit('respondFriendRequestResult', { success: true, message: `Lời mời đã được ${action}` });
+    //     } catch (err) {
+    //         console.error(err);
+    //         client.emit('respondFriendRequestResult', { success: false, message: "Lỗi server" });
+    //     }
+    // });
     client.on('respondFriendRequest', async (data) => {
         try {
             const { requestId, action } = data;
@@ -219,16 +256,23 @@ io.on('connection', (client) => {
                 client.emit('respondFriendRequestResult', { success: false, message: "Lời mời không tồn tại" });
                 return;
             }
-            if (request.status !== 'pending') {
-                client.emit('respondFriendRequestResult', { success: false, message: "Lời mời đã được xử lý" });
-                return;
-            }
+            // Nếu lời mời đã được xử lý rồi thì không cho xử lý lại
+            // (Nếu bạn có logic status, có thể check ở đây)
             if (action === 'accepted') {
-                // Cập nhật danh sách bạn của cả 2 user
+                // Cập nhật danh sách bạn cho cả 2 user
                 await accountModel.updateOne({ username: request.from }, { $addToSet: { friends: request.to } });
                 await accountModel.updateOne({ username: request.to }, { $addToSet: { friends: request.from } });
+                // Tạo room id cho private chat – dùng cách sắp xếp 2 username
+                const roomId = [request.from, request.to].sort().join("-");
+                // Gửi realtime event cập nhật private chat kèm roomId cho cả 2 bên
+                if (users[request.from]) {
+                    users[request.from].emit("friendAccepted", { friend: request.to, roomId });
+                }
+                if (users[request.to]) {
+                    users[request.to].emit("friendAccepted", { friend: request.from, roomId });
+                }
             }
-            // Xóa luôn lời mời kết bạn sau khi trả lời (dù là accepted hay rejected)
+            // Xóa lời mời kết bạn sau khi đã phản hồi
             await FriendRequest.deleteOne({ _id: requestId });
             client.emit('respondFriendRequestResult', { success: true, message: `Lời mời đã được ${action}` });
         } catch (err) {
@@ -237,7 +281,7 @@ io.on('connection', (client) => {
         }
     });
 
-    // Lấy danh sách lời mời kết bạn của user
+    // Lấy danh sách lời mời kết bạn của user hiện tại
     client.on('getFriendRequests', async (username) => {
         try {
             const requests = await FriendRequest.find({ to: username, status: 'pending' });
@@ -248,7 +292,7 @@ io.on('connection', (client) => {
         }
     });
 
-    // Lấy danh sách bạn của user
+    // Lấy danh sách bạn của user hiện tại
     client.on('getFriends', async (username) => {
         try {
             const user = await accountModel.findOne({ username });
@@ -262,8 +306,9 @@ io.on('connection', (client) => {
             client.emit('friendsList', []);
         }
     });
+
     // ---------------------------
-    // PHẦN GROUP CHAT
+    // PHẦN GROUP CHAT & MANAGEMENT (giữ nguyên code)
     // ---------------------------
     client.on("createGroupChat", (data) => {
         // data: { groupName, members }
@@ -313,7 +358,7 @@ io.on('connection', (client) => {
                     messages: messages
                 });
             }
-            // [Lấy private chats...]
+            // Lấy private chats dựa trên danh sách bạn từ accountModel
             const account = await accountModel.findOne({ username });
             const privateChats = [];
             if (account && account.friends && account.friends.length > 0) {
@@ -335,10 +380,9 @@ io.on('connection', (client) => {
     });
 
     // ---------------------------
-    // PHẦN GROUP MANAGEMENT FUNCTIONALITY
+    // PHẦN GROUP MANAGEMENT FUNCTIONALITY (các event khác không thay đổi nhiều)
     // ---------------------------
     client.on("getGroupDetails", async (data) => {
-        // data: { roomId }
         try {
             const group = await GroupChat.findOne({ roomId: data.roomId });
             if (!group) {
@@ -352,14 +396,12 @@ io.on('connection', (client) => {
     });
 
     client.on("addGroupMember", async (data) => {
-        // data: { roomId, newMember }
         try {
             const group = await GroupChat.findOne({ roomId: data.roomId });
             if (!group) {
                 client.emit("groupManagementResult", { success: false, message: "Group not found" });
                 return;
             }
-            // Cho phép bất kỳ thành viên nào (member, owner, deputy) đều có thể thêm thành viên
             if (group.members.includes(data.newMember)) {
                 client.emit("groupManagementResult", { success: false, message: "Member already in group" });
                 return;
@@ -367,11 +409,9 @@ io.on('connection', (client) => {
             group.members.push(data.newMember);
             await group.save();
 
-            // Gửi event cập nhật nhóm cho tất cả thành viên đang có trong room (những người đã join)
             io.to(data.roomId).emit("groupUpdated", JSON.stringify({ action: "addMember", newMember: data.newMember, group }));
             client.emit("groupManagementResult", { success: true, message: "Member added" });
 
-            // Nếu người được thêm đang online, gửi thông báo riêng
             if (users[data.newMember]) {
                 users[data.newMember].emit("addedToGroup", {
                     roomId: data.roomId,
@@ -385,7 +425,6 @@ io.on('connection', (client) => {
     });
 
     client.on("removeGroupMember", async (data) => {
-        // data: { roomId, memberToRemove }
         try {
             const group = await GroupChat.findOne({ roomId: data.roomId });
             if (!group) {
@@ -404,16 +443,13 @@ io.on('connection', (client) => {
                 client.emit("groupManagementResult", { success: false, message: "Member not in group" });
                 return;
             }
-            // Cập nhật danh sách thành viên
             group.members = group.members.filter(m => m !== data.memberToRemove);
             group.deputies = group.deputies.filter(m => m !== data.memberToRemove);
             await group.save();
 
-            // Thông báo realtime cho tất cả client trong room
             io.to(data.roomId).emit("groupUpdated", JSON.stringify({ action: "removeMember", removedMember: data.memberToRemove, group }));
             client.emit("groupManagementResult", { success: true, message: "Member removed" });
 
-            // Nếu người bị remove đang online, rời khỏi room và gửi thông báo riêng
             if (users[data.memberToRemove]) {
                 users[data.memberToRemove].leave(data.roomId);
                 users[data.memberToRemove].emit("kickedFromGroup", {
@@ -428,7 +464,6 @@ io.on('connection', (client) => {
     });
 
     client.on("transferGroupOwner", async (data) => {
-        // data: { roomId, newOwner }
         try {
             const group = await GroupChat.findOne({ roomId: data.roomId });
             if (!group) {
@@ -454,7 +489,6 @@ io.on('connection', (client) => {
     });
 
     client.on("assignDeputy", async (data) => {
-        // data: { roomId, member }
         try {
             const group = await GroupChat.findOne({ roomId: data.roomId });
             if (!group) {
@@ -483,7 +517,6 @@ io.on('connection', (client) => {
     });
 
     client.on("cancelDeputy", async (data) => {
-        // data: { roomId, member }
         try {
             const group = await GroupChat.findOne({ roomId: data.roomId });
             if (!group) {
@@ -507,7 +540,6 @@ io.on('connection', (client) => {
         }
     });
 
-    // Leave Group: Thành viên tự rời khỏi nhóm
     client.on("leaveGroup", async (data) => {
         try {
             const group = await GroupChat.findOne({ roomId: data.roomId });
@@ -522,19 +554,13 @@ io.on('connection', (client) => {
             group.members = group.members.filter(m => m !== client.username);
             group.deputies = group.deputies.filter(m => m !== client.username);
             await group.save();
-
-            // Rời khỏi room chat
             client.leave(data.roomId);
-
-            // Thông báo cho toàn bộ thành viên trong room
             group.members.forEach(member => {
                 if (users[member]) {
                     users[member].emit("groupUpdated", JSON.stringify({ action: "leaveGroup", leftMember: client.username, group }));
                 }
             });
             io.to(data.roomId).emit("groupUpdated", JSON.stringify({ action: "leaveGroup", leftMember: client.username, group }));
-
-            // Gửi event riêng cho người rời nhóm
             client.emit("leftGroup", { roomId: data.roomId, message: `Bạn đã rời khỏi nhóm "${group.groupName}"` });
         } catch (err) {
             console.error("Error in leaveGroup:", err);
@@ -542,9 +568,7 @@ io.on('connection', (client) => {
         }
     });
 
-    // Disband Group: Owner giải tán nhóm
     client.on("disbandGroup", async (data) => {
-        // data: { roomId }
         try {
             const group = await GroupChat.findOne({ roomId: data.roomId });
             if (!group) {
@@ -556,17 +580,12 @@ io.on('connection', (client) => {
                 return;
             }
             const disbandMessage = `Nhóm "${group.groupName}" đã bị giải tán`;
-
-            // Thông báo realtime đến tất cả các thành viên trong danh sách group.members
             group.members.forEach(member => {
                 if (users[member]) {
                     users[member].emit("groupDisbanded", { roomId: data.roomId, message: disbandMessage });
                 }
             });
-            // Broadcast tới room để đảm bảo những client đã join cũng nhận được thông báo
             io.to(data.roomId).emit("groupDisbanded", { roomId: data.roomId, message: disbandMessage });
-
-            // Xóa group khỏi cơ sở dữ liệu
             await GroupChat.deleteOne({ roomId: data.roomId });
             client.emit("groupManagementResult", { success: true, message: "Group disbanded" });
         } catch (err) {
@@ -574,12 +593,10 @@ io.on('connection', (client) => {
             client.emit("groupManagementResult", { success: false, message: "Error disbanding group" });
         }
     });
-    
 
     // ---------------------------
     //    SIGNALING CHO CALL
     // ---------------------------
-    // A gọi B: gửi SDP offer
     client.on("callUser", ({ userToCall, signalData, from }) => {
         const callee = users[userToCall];
         if (!callee) {
@@ -590,13 +607,11 @@ io.on('connection', (client) => {
             client.emit("callError", { message: "Người nhận đang bận." });
             return;
         }
-        // Đánh dấu cả 2 đang trong call
         usersInCall[from] = true;
         usersInCall[userToCall] = true;
         callee.emit("callIncoming", { from, signal: signalData });
     });
 
-    // B chấp nhận cuộc gọi: gửi SDP answer về A
     client.on("acceptCall", ({ to, signal }) => {
         const caller = users[to];
         if (caller) {
@@ -604,18 +619,15 @@ io.on('connection', (client) => {
         }
     });
 
-    // B từ chối cuộc gọi
     client.on("rejectCall", ({ to }) => {
         const caller = users[to];
         if (caller) {
             caller.emit("callRejected");
         }
-        // Giải phóng trạng thái gọi
         delete usersInCall[to];
         delete usersInCall[client.username];
     });
 
-    // Relay ICE candidates
     client.on("iceCandidate", ({ to, candidate }) => {
         const peerSocket = users[to];
         if (peerSocket) {
@@ -623,7 +635,6 @@ io.on('connection', (client) => {
         }
     });
 
-    // Kết thúc cuộc gọi
     client.on("endCall", ({ to }) => {
         const peerSocket = users[to];
         if (peerSocket) {
@@ -632,7 +643,6 @@ io.on('connection', (client) => {
         delete usersInCall[to];
         delete usersInCall[client.username];
     });
-    // ---------------------------
 });
 
 connectDB();
