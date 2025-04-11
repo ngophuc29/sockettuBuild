@@ -3,6 +3,8 @@ const OTP = require('../models/OTP');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const sendEmail = require('../utils/sendEmail');
+const emailExistence = require('email-existence');
+const sharp = require('sharp');
 
 // Tạo mã OTP ngẫu nhiên
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
@@ -18,20 +20,38 @@ const registerUserStep1 = async (req, res) => {
             return res.status(400).json({ message: 'Email đã được đăng ký' });
         }
 
-        const otp = generateOTP();
-        await sendEmail(email, 'Xác nhận đăng ký', `Mã OTP của bạn là: ${otp}`);
+        // Sử dụng email-existence để kiểm tra email có tồn tại thực sự
+        emailExistence.check(email, async (err, exists) => {
+            if (err) {
+                console.error('Lỗi khi kiểm tra email:', err);
+                return res.status(500).json({ message: 'Lỗi khi kiểm tra email', error: err.message });
+            }
 
-        await OTP.create({ email, otp, expiration: Date.now() + 10 * 60 * 1000 });
+            if (!exists) {
+                return res.status(400).json({ message: 'Email không tồn tại trên hệ thống thực tế' });
+            }
 
-        res.status(200).json({ message: 'Đã gửi OTP tới email' });
+            // Nếu email tồn tại, tiến hành gửi OTP
+            const otp = generateOTP();
+
+            try {
+                await sendEmail(email, 'Xác nhận đăng ký', `Mã OTP của bạn là: ${otp}`);
+            } catch (error) {
+                return res.status(400).json({
+                    message: 'Không gửi được email. Có thể email không tồn tại hoặc bị lỗi.',
+                    error: error.message
+                });
+            }
+
+            await OTP.create({ email, otp, expiration: Date.now() + 10 * 60 * 1000 });
+            return res.status(200).json({ message: 'Đã gửi OTP tới email' });
+        });
     } catch (error) {
-        res.status(500).json({ message: 'Lỗi server', error: error.message });
+        return res.status(500).json({ message: 'Lỗi server', error: error.message });
     }
 };
 
 // Step 2: Đăng ký sau khi xác thực OTP
-const sharp = require('sharp');
-
 const registerUserStep2 = async (req, res) => {
     const { username, password, phone, email, birthday, fullname, image } = req.body;
 
@@ -92,7 +112,6 @@ const registerUserStep2 = async (req, res) => {
         res.status(500).json({ message: 'Lỗi server', error: error.message });
     }
 };
-
 
 // Login bằng username, phone hoặc email + password
 const loginUser = async (req, res) => {
@@ -178,25 +197,42 @@ const verifyOTP = async (req, res) => {
 // Lấy danh sách tài khoản
 const getAccounts = async (req, res) => {
     try {
-        const users = await User.find() ;
+        const users = await User.find();
         res.status(200).json(users);
     } catch (error) {
         res.status(500).json({ message: 'Lỗi server', error: error.message });
     }
 };
+
 const getAccountByUsername = async (req, res) => {
     const { username } = req.params;
 
     try {
         const user = await User.findOne({ username });
-
         if (!user) {
             return res.status(404).json({ message: 'Không tìm thấy người dùng' });
         }
-
         res.status(200).json(user);
     } catch (error) {
         res.status(500).json({ message: 'Lỗi server', error: error.message });
+    }
+};
+//  Check xem email đã được đăng ký hay chưa
+const checkEmail = async (req, res) => {
+    const { email } = req.query;
+    if (!email) {
+        return res.status(400).json({ message: 'Vui lòng cung cấp email' });
+    }
+
+    try {
+        const user = await User.findOne({ email });
+        if (user) {
+            return res.status(200).json({ exists: true, message: 'Email đã được đăng ký' });
+        } else {
+            return res.status(200).json({ exists: false, message: 'Email chưa được đăng ký' });
+        }
+    } catch (error) {
+        return res.status(500).json({ message: 'Lỗi server', error: error.message });
     }
 };
 const updateUserProfile = async (req, res) => {
@@ -233,6 +269,44 @@ const updateUserProfile = async (req, res) => {
     } catch (error) {
         res.status(500).json({ message: 'Lỗi server', error: error.message });
     }
+
+     
+    };
+    // Hàm đổi mật khẩu cho người dùng đã đăng nhập
+// Route: PUT /api/accounts/change-password/:username
+
+const changePassword = async (req, res) => {
+    const { oldPassword, newPassword } = req.body;
+    const { username } = req.params;
+
+    console.log('Change password request:', { username, oldPassword, newPassword });
+
+    if (!username || !oldPassword || !newPassword) {
+        return res.status(400).json({ message: 'Vui lòng cung cấp đầy đủ username, mật khẩu cũ và mật khẩu mới' });
+    }
+
+    try {
+        const user = await User.findOne({ username });
+        if (!user) {
+            return res.status(404).json({ message: 'Không tìm thấy người dùng' });
+        }
+
+        const isMatch = await user.matchPassword(oldPassword);
+        if (!isMatch) {
+            return res.status(400).json({ message: 'Mật khẩu cũ không đúng' });
+        }
+
+        user.password = newPassword;
+        await user.save();
+
+        return res.status(200).json({ message: 'Password updated' });
+    } catch (error) {
+        return res.status(500).json({ message: 'Lỗi server', error: error.message });
+    }
+ 
+
+     
+
 };
 
 module.exports = {
@@ -244,5 +318,6 @@ module.exports = {
     verifyOTP,
     getAccounts,
     getAccountByUsername,
-    updateUserProfile
+    updateUserProfile,
+    checkEmail,changePassword
 };

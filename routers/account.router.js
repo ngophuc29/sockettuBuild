@@ -33,4 +33,8 @@ router.get('/username/:username', accountController.getAccountByUsername);
 
 // Cập nhật thông tin tài khoản
 router.put('/:username', accountController.updateUserProfile);
+
+router.put('/change-password/:username', accountController.changePassword);
+
+router.get('/check-email', accountController.checkEmail);
 module.exports = router;
