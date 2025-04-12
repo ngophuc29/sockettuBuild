@@ -208,15 +208,22 @@ io.on('connection', (client) => {
     client.on('cancelFriend', async (data) => {
         try {
             const { myUsername, friendUsername } = data;
-            await accountModel.updateOne({ username: myUsername }, { $pull: { friends: friendUsername } });
-            await accountModel.updateOne({ username: friendUsername }, { $pull: { friends: myUsername } });
+            console.log(`[cancelFriend] User ${myUsername} muốn hủy kết bạn với ${friendUsername}`);
+
+            // Chạy song song 2 lệnh updateOne
+            await Promise.all([
+                accountModel.updateOne({ username: myUsername }, { $pull: { friends: friendUsername } }),
+                accountModel.updateOne({ username: friendUsername }, { $pull: { friends: myUsername } })
+            ]);
+
+            console.log(`[cancelFriend] Hủy kết bạn thành công: ${friendUsername}`);
             client.emit('cancelFriendResult', { success: true, message: `Hủy kết bạn với ${friendUsername} thành công` });
-            // Bạn có thể phát event cho friend nếu cần cập nhật realtime cho cả 2 bên
         } catch (err) {
-            console.error(err);
+            console.error("[cancelFriend] Lỗi khi hủy kết bạn:", err);
             client.emit('cancelFriendResult', { success: false, message: "Lỗi server" });
         }
     });
+
 
     // Phản hồi lời mời kết bạn: nếu accepted cập nhật danh sách friend realtime cho cả 2 bên
     // client.on('respondFriendRequest', async (data) => {
