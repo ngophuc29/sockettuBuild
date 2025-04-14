@@ -384,8 +384,45 @@ io.on('connection', (client) => {
             });
     });
 
+    // client.on("getUserConversations", async (username) => {
+    //     try {
+    //         const groups = await GroupChat.find({ members: username });
+    //         const groupChats = [];
+    //         for (const group of groups) {
+    //             const messages = await Message.find({ room: group.roomId }).sort({ createdAt: 1 });
+    //             groupChats.push({
+    //                 roomId: group.roomId,
+    //                 groupName: group.groupName,
+    //                 members: group.members,
+    //                 owner: group.owner,
+    //                 deputies: group.deputies,
+    //                 messages: messages
+    //             });
+    //         }
+    //         // Đối với private chat, dựa vào danh sách bạn được lưu trong tài khoản
+    //         const account = await accountModel.findOne({ username });
+    //         const privateChats = [];
+    //         if (account && account.friends && account.friends.length > 0) {
+    //             for (const friend of account.friends) {
+    //                 // Room id luôn được tính bằng [username, friend].sort().join("-")
+    //                 const room = [username, friend].sort().join('-');
+    //                 const messages = await Message.find({ room: room }).sort({ createdAt: 1 });
+    //                 privateChats.push({
+    //                     roomId: room,
+    //                     friend: friend,
+    //                     messages: messages
+    //                 });
+    //             }
+    //         }
+    //         client.emit("userConversations", JSON.stringify({ groupChats, privateChats }));
+    //     } catch (err) {
+    //         console.error("Error loading user conversations:", err);
+    //         client.emit("userConversations", JSON.stringify({ groupChats: [], privateChats: [] }));
+    //     }
+    // });
     client.on("getUserConversations", async (username) => {
         try {
+            // --- Lấy danh sách group chat như cũ ---
             const groups = await GroupChat.find({ members: username });
             const groupChats = [];
             for (const group of groups) {
@@ -399,14 +436,18 @@ io.on('connection', (client) => {
                     messages: messages
                 });
             }
-            // Đối với private chat, dựa vào danh sách bạn được lưu trong tài khoản
-            const account = await accountModel.findOne({ username });
+
+            // --- Lấy danh sách private chat theo lịch sử tin nhắn ---
+            // Giả sử room private có định dạng: "userA-userB" (không chứa dấu "_")
+            const roomIds = await Message.distinct("room", { room: { $not: /_/ } });
             const privateChats = [];
-            if (account && account.friends && account.friends.length > 0) {
-                for (const friend of account.friends) {
-                    // Room id luôn được tính bằng [username, friend].sort().join("-")
-                    const room = [username, friend].sort().join('-');
+            for (const room of roomIds) {
+                // Kiểm tra nếu room có chứa username của người dùng
+                if (room.split("-").includes(username)) {
                     const messages = await Message.find({ room: room }).sort({ createdAt: 1 });
+                    // Xác định đối phương: với room dạng [userA, userB] => đối phương là người khác với username
+                    const participants = room.split("-");
+                    const friend = participants.find(name => name !== username) || username;
                     privateChats.push({
                         roomId: room,
                         friend: friend,
@@ -414,6 +455,7 @@ io.on('connection', (client) => {
                     });
                 }
             }
+
             client.emit("userConversations", JSON.stringify({ groupChats, privateChats }));
         } catch (err) {
             console.error("Error loading user conversations:", err);
