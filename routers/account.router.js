@@ -37,4 +37,8 @@ router.put('/:username', accountController.updateUserProfile);
 router.put('/change-password/:username', accountController.changePassword);
 
 router.get('/check-email', accountController.checkEmail);
+ 
+router.get('/check-username', accountController.checkUsername);
+ 
+router.get('/check-phone', accountController.checkPhone);
 module.exports = router;

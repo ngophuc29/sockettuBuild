@@ -270,9 +270,9 @@ const updateUserProfile = async (req, res) => {
         res.status(500).json({ message: 'Lỗi server', error: error.message });
     }
 
-     
-    };
-    // Hàm đổi mật khẩu cho người dùng đã đăng nhập
+
+};
+// Hàm đổi mật khẩu cho người dùng đã đăng nhập
 // Route: PUT /api/accounts/change-password/:username
 
 const changePassword = async (req, res) => {
@@ -303,10 +303,46 @@ const changePassword = async (req, res) => {
     } catch (error) {
         return res.status(500).json({ message: 'Lỗi server', error: error.message });
     }
- 
 
-     
 
+
+
+};
+//  Check xem email đã được đăng ký hay chưa
+const checkUsername = async (req, res) => {
+    const { username } = req.query;
+    if (!username) {
+        return res.status(400).json({ message: 'Vui lòng cung cấp username' });
+    }
+
+    try {
+        const user = await User.findOne({ username });
+        if (user) {
+            return res.status(200).json({ exists: true, message: 'Username đã được đăng ký' });
+        } else {
+            return res.status(200).json({ exists: false, message: 'Username chưa được đăng ký' });
+        }
+    } catch (error) {
+        return res.status(500).json({ message: 'Lỗi server', error: error.message });
+    }
+};
+
+const checkPhone = async (req, res) => {
+    const { phone } = req.query;
+    if (!phone ) {
+        return res.status(400).json({ message: 'Vui lòng cung cấp phone ' });
+    }
+
+    try {
+        const user = await User.findOne({ phone  });
+        if (user) {
+            return res.status(200).json({ exists: true, message: 'phone  đã được đăng ký' });
+        } else {
+            return res.status(200).json({ exists: false, message: 'phone  chưa được đăng ký' });
+        }
+    } catch (error) {
+        return res.status(500).json({ message: 'Lỗi server', error: error.message });
+    }
 };
 
 module.exports = {
@@ -319,5 +355,5 @@ module.exports = {
     getAccounts,
     getAccountByUsername,
     updateUserProfile,
-    checkEmail,changePassword
+    checkEmail, changePassword, checkUsername, checkPhone
 };
