@@ -44,6 +44,8 @@ io.on('connection', (client) => {
         users[username] = client;
         client.username = username;
         console.log(`[REGISTER] ${username} → ${client.id}`);
+        // Phát sự kiện đến tất cả các client khác để thông báo có user mới đăng ký
+        client.broadcast.emit("userJoined", { username });
     });
 
     client.on("disconnect", () => {
@@ -197,14 +199,24 @@ io.on('connection', (client) => {
                 client.emit('addFriendResult', { success: false, message: "Lời mời đã được gửi trước đó" });
                 return;
             }
-            await FriendRequest.create({ from: myUsername, to: friendUsername });
-            // Thông báo cho người gửi rằng lời mời đã được gửi thành công
+            // Sửa lại ở đây: Thêm status 'pending'
+            await FriendRequest.create({ from: myUsername, to: friendUsername, status: 'pending' });
+            // Thông báo cho người gửi
             client.emit('addFriendResult', { success: true, message: `Gửi lời mời kết bạn đến ${friendUsername} thành công` });
-            io.emit('friendRequestSent', { from: myUsername, to: friendUsername });
-            // Nếu người nhận đang online thì gửi sự kiện thông báo lời mời mới
+            // Phát sự kiện realtime: cho bên nhận biết có lời mời mới
             if (users[friendUsername]) {
-                users[friendUsername].emit("newFriendRequest", { from: myUsername });
+                // Gửi thông báo có lời mời mới
+                users[friendUsername].emit("newFriendRequest", {
+                    from: myUsername,
+                    // Gửi luôn toàn bộ danh sách lời mời mới
+                    requests: await FriendRequest.find({ to: friendUsername, status: 'pending' })
+                });
             }
+            // Phát sự kiện chung để các client khác cập nhật nếu cần
+            io.emit('friendRequestUpdated', {
+                to: friendUsername,
+                action: 'added'
+            });
         } catch (err) {
             console.error("Lỗi kết bạn:", err);
             client.emit('addFriendResult', { success: false, message: "Lỗi server" });
@@ -294,7 +306,7 @@ io.on('connection', (client) => {
                 });
                 return;
             }
-
+            io.emit('friendRequestWithdrawn', { from: myUsername, to: friendUsername });
             client.emit('withdrawFriendRequestResult', {
                 success: true,
                 message: `Đã thu hồi lời mời kết bạn gửi đến ${friendUsername}`
@@ -314,7 +326,7 @@ io.on('connection', (client) => {
                 });
                 users[friendUsername].emit('friendRequests', updatedRequests);
             }
-            io.emit('friendRequestWithdrawn', { from: myUsername, to: friendUsername });
+
         } catch (err) {
             console.error("[withdrawFriendRequest] Lỗi thu hồi lời mời:", err);
             client.emit('withdrawFriendRequestResult', {

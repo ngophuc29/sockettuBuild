@@ -60,24 +60,25 @@ const registerUserStep2 = async (req, res) => {
     }
 
     try {
-        const existing = await User.findOne({ $or: [{ username }, { phone }, { email }] });
-        if (existing) {
-            return res.status(400).json({ message: 'Tài khoản đã tồn tại' });
+        const existingUser = await User.findOne({ username });
+        if (existingUser) return res.status(400).json({ message: 'Tên đăng nhập đã tồn tại' });
+
+        const existingPhone = await User.findOne({ phone });
+        if (existingPhone) return res.status(400).json({ message: 'Số điện thoại đã tồn tại' });
+
+        if (email) {
+            const existingEmail = await User.findOne({ email });
+            if (existingEmail) return res.status(400).json({ message: 'Email đã tồn tại' });
         }
 
         let compressedImage = null;
 
         if (image) {
-            // Giải mã base64 → buffer
             const buffer = Buffer.from(image.split(',')[1], 'base64');
-
-            // Nén ảnh bằng sharp: nhỏ nhất có thể (JPEG chất lượng thấp nhất)
             const outputBuffer = await sharp(buffer)
-                .resize({ width: 100 }) // resize nhỏ để giảm thêm size
-                .jpeg({ quality: 10 })  // giảm chất lượng max
+                .resize({ width: 100 })
+                .jpeg({ quality: 10 })
                 .toBuffer();
-
-            // Convert ngược về base64 để lưu vào DB
             compressedImage = `data:image/jpeg;base64,${outputBuffer.toString('base64')}`;
         }
 
@@ -94,6 +95,15 @@ const registerUserStep2 = async (req, res) => {
         await user.save();
 
         const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+        // Emit sự kiện cho các client khác
+        // req.app.get('io').emit('new_user', {
+        //     id: user._id,
+        //     username: user.username,
+        //     phone: user.phone,
+        //     fullname: user.fullname,
+        //     image: user.image,
+        // });
 
         res.status(201).json({
             message: 'Đăng ký thành công',
