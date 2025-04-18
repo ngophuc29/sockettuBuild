@@ -226,18 +226,33 @@ io.on('connection', (client) => {
     client.on('cancelFriend', async (data) => {
         try {
             const { myUsername, friendUsername } = data;
-            console.log(`[cancelFriend] User ${myUsername} muốn hủy kết bạn với ${friendUsername}`);
+            // 1) Cập nhật DB
             await Promise.all([
                 accountModel.updateOne({ username: myUsername }, { $pull: { friends: friendUsername } }),
                 accountModel.updateOne({ username: friendUsername }, { $pull: { friends: myUsername } })
             ]);
-            console.log(`[cancelFriend] Hủy kết bạn thành công: ${friendUsername}`);
+
+            // 2) Lấy lại danh sách bạn hiện tại
+            const userA = await accountModel.findOne({ username: myUsername });
+            const userB = await accountModel.findOne({ username: friendUsername });
+            const listA = userA.friends;
+            const listB = userB.friends;
+
+            // 3) Emit kết quả và cập nhật realtime
             client.emit('cancelFriendResult', { success: true, message: `Hủy kết bạn với ${friendUsername} thành công` });
+
+            if (users[myUsername]) {
+                users[myUsername].emit('friendsListUpdated', listA);
+            }
+            if (users[friendUsername]) {
+                users[friendUsername].emit('friendsListUpdated', listB);
+            }
         } catch (err) {
             console.error("[cancelFriend] Lỗi khi hủy kết bạn:", err);
             client.emit('cancelFriendResult', { success: false, message: "Lỗi server" });
         }
     });
+
 
     // Khi phản hồi lời mời kết bạn, nếu accepted cập nhật danh sách bạn và tạo room theo công thức
     client.on('respondFriendRequest', async (data) => {
@@ -249,17 +264,36 @@ io.on('connection', (client) => {
                 return;
             }
             if (action === 'accepted') {
-                await accountModel.updateOne({ username: request.from }, { $addToSet: { friends: request.to } });
-                await accountModel.updateOne({ username: request.to }, { $addToSet: { friends: request.from } });
-                // Tạo room id dựa trên 2 username cố định
+                // 1) Cập nhật DB
+                await accountModel.updateOne(
+                    { username: request.from },
+                    { $addToSet: { friends: request.to } }
+                );
+                await accountModel.updateOne(
+                    { username: request.to },
+                    { $addToSet: { friends: request.from } }
+                );
+
+                // 2) Tạo room chat
                 const roomId = [request.from, request.to].sort().join("-");
+
+                // 3) Lấy lại danh sách bạn mới
+                const userFrom = await accountModel.findOne({ username: request.from });
+                const userTo = await accountModel.findOne({ username: request.to });
+                const listFrom = userFrom.friends;
+                const listTo = userTo.friends;
+
+                // 4) Emit cho cả hai user
                 if (users[request.from]) {
                     users[request.from].emit("friendAccepted", { friend: request.to, roomId });
+                    users[request.from].emit("friendsListUpdated", listFrom);
                 }
                 if (users[request.to]) {
                     users[request.to].emit("friendAccepted", { friend: request.from, roomId });
+                    users[request.to].emit("friendsListUpdated", listTo);
                 }
             }
+            // Xoá lời mời đã xử lý
             await FriendRequest.deleteOne({ _id: requestId });
             client.emit('respondFriendRequestResult', { success: true, message: `Lời mời đã được ${action}` });
         } catch (err) {
@@ -267,6 +301,7 @@ io.on('connection', (client) => {
             client.emit('respondFriendRequestResult', { success: false, message: "Lỗi server" });
         }
     });
+
     // client.on('withdrawFriendRequest', async (data) => {
     //     try {
     //         const { myUsername, friendUsername } = data;
