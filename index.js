@@ -669,31 +669,59 @@ io.on('connection', (client) => {
 
     client.on("leaveGroup", async (data) => {
         try {
-            const group = await GroupChat.findOne({ roomId: data.roomId });
+            const { roomId, newOwner } = data;
+            const group = await GroupChat.findOne({ roomId });
             if (!group) {
-                client.emit("groupManagementResult", { success: false, message: "Group not found" });
-                return;
+                return client.emit("groupManagementResult", { success: false, message: "Group not found." });
             }
+
+            // Nếu là owner
             if (group.owner === client.username) {
-                client.emit("groupManagementResult", { success: false, message: "Owner cannot leave the group. Please disband or transfer ownership." });
-                return;
+                // Bắt buộc phải cung cấp newOwner
+                if (!newOwner) {
+                    return client.emit("groupManagementResult", {
+                        success: false,
+                        message: "Bạn là chủ nhóm, phải chuyển quyền cho thành viên khác trước khi rời. Vui lòng truyền { roomId, newOwner }."
+                    });
+                }
+                // Kiểm tra newOwner có trong nhóm không
+                if (!group.members.includes(newOwner)) {
+                    return client.emit("groupManagementResult", {
+                        success: false,
+                        message: `Không tìm thấy thành viên '${newOwner}' trong nhóm.`
+                    });
+                }
+                // Chuyển quyền
+                group.owner = newOwner;
+                // Nếu newOwner trước đó là deputy, giữ nguyên; còn không, có thể thêm vào deputies hoặc để như cũ
+                group.deputies = group.deputies.filter(m => m !== newOwner);
             }
+
+            // Loại bỏ member (thường là chính client.username)
             group.members = group.members.filter(m => m !== client.username);
             group.deputies = group.deputies.filter(m => m !== client.username);
+
             await group.save();
-            client.leave(data.roomId);
-            group.members.forEach(member => {
-                if (users[member]) {
-                    users[member].emit("groupUpdated", JSON.stringify({ action: "leaveGroup", leftMember: client.username, group }));
-                }
+
+            // Cho tất cả member còn lại biết
+            io.to(roomId).emit("groupUpdated", JSON.stringify({
+                action: "leaveGroup",
+                leftMember: client.username,
+                group
+            }));
+
+            // Cho client biết đã rời
+            client.leave(roomId);
+            client.emit("leftGroup", {
+                roomId,
+                message: `Bạn đã rời khỏi nhóm "${group.groupName}".`
             });
-            io.to(data.roomId).emit("groupUpdated", JSON.stringify({ action: "leaveGroup", leftMember: client.username, group }));
-            client.emit("leftGroup", { roomId: data.roomId, message: `Bạn đã rời khỏi nhóm "${group.groupName}"` });
         } catch (err) {
             console.error("Error in leaveGroup:", err);
-            client.emit("groupManagementResult", { success: false, message: "Error leaving group" });
+            client.emit("groupManagementResult", { success: false, message: "Error leaving group." });
         }
     });
+
 
     client.on("disbandGroup", async (data) => {
         try {
