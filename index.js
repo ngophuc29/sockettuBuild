@@ -36,6 +36,18 @@ const users = {};
 // Map lưu trạng thái đang call của từng user
 const usersInCall = {};
 
+ 
+async function getLastMessageInRoom(roomId) {
+    try {
+        return await Message
+            .findOne({ room: roomId })
+            .sort({ createdAt: -1 })
+            .lean();
+    } catch (err) {
+        console.error(`Error in getLastMessageInRoom(${roomId}):`, err);
+        throw err;
+    }
+}
 io.on('connection', (client) => {
     console.log('A user connected');
 
@@ -127,6 +139,18 @@ io.on('connection', (client) => {
             console.error("Error saving message:", err);
         }
     });
+
+    client.on('getLastMessage', async (roomId) => {
+        try {
+            const last = await getLastMessageInRoom(roomId);
+            client.emit('lastMessage', last);           // trả về message object hoặc null
+        } catch (err) {
+            client.emit('lastMessageError', {
+                message: 'Lấy tin nhắn cuối cùng thất bại.'
+            });
+        }
+    });
+    
 
     client.on("deleteMessage", async (data) => {
         try {
