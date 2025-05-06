@@ -30,5 +30,6 @@ const messageSchema = new mongoose.Schema({
 // Thêm index mới (không ảnh hưởng đến code hiện có)
 messageSchema.index({ room: 1, createdAt: -1 }); // Cho tin nhắn mới nhất trước
 messageSchema.index({ fileType: 1 });            // Tìm kiếm theo loại file
-
+ 
+messageSchema.index({ name: 1 });
 module.exports = mongoose.model('Message', messageSchema);

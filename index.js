@@ -21,6 +21,8 @@ const router = require('./routers');
 const Message = require('./models/message.model');
 const Reaction = require('./models/reaction.model');
 
+
+
 // --- Các model cho friend functionality ---
 const accountModel = require('./models/account.model');
 const FriendRequest = require('./models/friendRequest.model');
@@ -36,18 +38,58 @@ const users = {};
 // Map lưu trạng thái đang call của từng user
 const usersInCall = {};
 
- 
+// Cache tin nhắn cuối cùng
+const lastMessageCache = new Map();
+const CACHE_DURATION = 10000; // Giảm thời gian cache từ 30s xuống 10s
+
 async function getLastMessageInRoom(roomId) {
     try {
-        return await Message
-            .findOne({ room: roomId })
-            .sort({ createdAt: -1 })
-            .lean();
+        // 1. Kiểm tra cache
+        const cached = lastMessageCache.get(roomId);
+        if (cached && (Date.now() - cached.timestamp < CACHE_DURATION)) {
+            return cached.message;
+        }
+
+        // 2. Query với index và chỉ lấy fields cần thiết
+        const message = await Message.findOne(
+            { room: roomId },
+            {
+                name: 1,
+                message: 1,
+                room: 1,
+                fileUrl: 1,
+                createdAt: 1,
+                _id: 0
+            }
+        )
+        .sort({ createdAt: -1 })
+        .lean();  // Sử dụng lean() để giảm overhead
+
+        // 3. Cache kết quả với timestamp
+        if (message) {
+            lastMessageCache.set(roomId, {
+                message,
+                timestamp: Date.now()
+            });
+        }
+
+        return message;
     } catch (err) {
         console.error(`Error in getLastMessageInRoom(${roomId}):`, err);
-        throw err;
+        return null; // Return null thay vì throw error
     }
 }
+
+// Thêm function dọn cache định kỳ
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, value] of lastMessageCache.entries()) {
+        if (now - value.timestamp > CACHE_DURATION) {
+            lastMessageCache.delete(key);
+        }
+    }
+}, CACHE_DURATION);
+
 io.on('connection', (client) => {
     console.log('A user connected');
 
@@ -70,13 +112,33 @@ io.on('connection', (client) => {
     // ---------------------------
     // PHẦN CHAT (join, leave, message, deleteMessage, emotion …)
     // ---------------------------
+    // client.on('join', async (data) => {
+    //     const currentRoom = data;
+    //     client.join(currentRoom);
+    //     try {
+    //         const history = await Message.find({ room: currentRoom }).sort({ createdAt: 1 });
+    //         client.emit("history", JSON.stringify(history));
+    //         const reactions = await Reaction.find({ room: currentRoom }).sort({ createdAt: 1 });
+    //         client.emit("reactionHistory", JSON.stringify(reactions));
+    //     } catch (err) {
+    //         console.error("Error retrieving chat history:", err);
+    //     }
+    // });
     client.on('join', async (data) => {
         const currentRoom = data;
         client.join(currentRoom);
         try {
-            const history = await Message.find({ room: currentRoom }).sort({ createdAt: 1 });
+            // Sửa lại limit(8) và sort(-1) để lấy 8 tin nhắn mới nhất
+            const history = await Message.find({ room: currentRoom })
+                .sort({ createdAt: -1 })
+                .limit(8)
+                // Reverse lại để hiển thị theo thứ tự cũ -> mới
+                .then(messages => messages.reverse());
+
             client.emit("history", JSON.stringify(history));
-            const reactions = await Reaction.find({ room: currentRoom }).sort({ createdAt: 1 });
+
+            const reactions = await Reaction.find({ room: currentRoom })
+                .sort({ createdAt: 1 });
             client.emit("reactionHistory", JSON.stringify(reactions));
         } catch (err) {
             console.error("Error retrieving chat history:", err);
@@ -103,7 +165,19 @@ io.on('connection', (client) => {
                 room: currentRoom,
                 fileUrl: messageObj.fileUrl
             });
+            
+            // Cập nhật cache với tin nhắn mới nhất
+            lastMessageCache.set(currentRoom, {
+                name: messageObj.name,
+                message: messageObj.message,
+                room: currentRoom,
+                fileUrl: messageObj.fileUrl,
+                createdAt: new Date()
+            });
+
+            messageObj.createdAt = newMessage.createdAt;
             messageObj._id = newMessage._id;
+             // ← Thêm createdAt vào payload gửi về client
             io.to(currentRoom).emit("thread", JSON.stringify(messageObj));
 
             // Gửi notification cho các thành viên trong phòng.
@@ -493,39 +567,51 @@ io.on('connection', (client) => {
     // });
     client.on("getUserConversations", async (username) => {
         try {
-            // --- Lấy danh sách group chat như cũ ---
+            // --- Lấy danh sách group chat ---
             const groups = await GroupChat.find({ members: username });
             const groupChats = [];
             for (const group of groups) {
-                const messages = await Message.find({ room: group.roomId }).sort({ createdAt: 1 });
+                // Chỉ lấy 8 tin nhắn mới nhất của mỗi group
+                const messages = await Message.find({ room: group.roomId })
+                    .sort({ createdAt: -1 })
+                    .limit(8)
+                    .lean();  // Dùng lean() để tối ưu memory
+                    
                 groupChats.push({
                     roomId: group.roomId,
                     groupName: group.groupName,
                     members: group.members,
                     owner: group.owner,
                     deputies: group.deputies,
-                    messages: messages
+                    messages: messages.reverse() // Đảo ngược để hiển thị cũ -> mới
                 });
             }
 
-            // --- Lấy danh sách private chat theo lịch sử tin nhắn ---
-            // Giả sử room private có định dạng: "userA-userB" (không chứa dấu "_")
-            const roomIds = await Message.distinct("room", { room: { $not: /_/ } });
-            const privateChats = [];
-            for (const room of roomIds) {
-                // Kiểm tra nếu room có chứa username của người dùng
-                if (room.split("-").includes(username)) {
-                    const messages = await Message.find({ room: room }).sort({ createdAt: 1 });
-                    // Xác định đối phương: với room dạng [userA, userB] => đối phương là người khác với username
-                    const participants = room.split("-");
-                    const friend = participants.find(name => name !== username) || username;
-                    privateChats.push({
-                        roomId: room,
-                        friend: friend,
-                        messages: messages
-                    });
-                }
-            }
+            // --- Lấy danh sách private chat ---
+            const roomIds = await Message.distinct("room", { 
+                room: { $not: /_/ },
+                $or: [
+                    { name: username },
+                    { room: { $regex: username } }
+                ]
+            });
+
+            const privateChats = await Promise.all(roomIds.map(async room => {
+                // Chỉ lấy 8 tin nhắn mới nhất của mỗi private chat
+                const messages = await Message.find({ room })
+                    .sort({ createdAt: -1 })
+                    .limit(8)
+                    .lean();
+
+                const participants = room.split("-");
+                const friend = participants.find(name => name !== username) || username;
+                
+                return {
+                    roomId: room,
+                    friend: friend,
+                    messages: messages.reverse()
+                };
+            }));
 
             client.emit("userConversations", JSON.stringify({ groupChats, privateChats }));
         } catch (err) {
