@@ -147,70 +147,49 @@ io.on('connection', (client) => {
 
     client.on("leave", (data) => {
         client.leave(data);
-    });
-
-    client.on("message", async (data) => {
-        let messageObj;
+    });    client.on("message", async (data) => {
         try {
-            messageObj = JSON.parse(data);
-        } catch (err) {
-            console.error("Error parsing message data:", err);
-            return;
-        }
-        const currentRoom = messageObj.room;
-        try {
-            const newMessage = await Message.create({
-                name: messageObj.name,
-                message: messageObj.message,
-                room: currentRoom,
-                fileUrl: messageObj.fileUrl
-            });
-            
-            // Cập nhật cache với tin nhắn mới nhất
-            lastMessageCache.set(currentRoom, {
-                name: messageObj.name,
-                message: messageObj.message,
-                room: currentRoom,
-                fileUrl: messageObj.fileUrl,
-                createdAt: new Date()
+            const msgData = JSON.parse(data);
+            const newMessage = new Message({
+                name: msgData.name,
+                message: msgData.message,
+                room: msgData.room,
+                createdAt: msgData.createdAt || new Date(),
+                ...(msgData.replyTo && {
+                    replyTo: {
+                        id: msgData.replyTo.id,
+                        name: msgData.replyTo.name,
+                        message: msgData.replyTo.message
+                    }
+                })
             });
 
-            messageObj.createdAt = newMessage.createdAt;
-            messageObj._id = newMessage._id;
-             // ← Thêm createdAt vào payload gửi về client
-            io.to(currentRoom).emit("thread", JSON.stringify(messageObj));
+            await newMessage.save();
 
-            // Gửi notification cho các thành viên trong phòng.
-            // Nếu room là group chat (có dấu '_' trong roomId) thì dựa theo GroupChat model.
-            if (currentRoom.indexOf('_') > -1) {
-                try {
-                    const group = await GroupChat.findOne({ roomId: currentRoom });
-                    if (group) {
-                        group.members.forEach(member => {
-                            if (member !== client.username && users[member]) {
-                                // Kiểm tra socket của member có join room này chưa
-                                if (!users[member].rooms || !users[member].rooms.has(currentRoom)) {
-                                    users[member].emit("notification", { room: currentRoom, message: JSON.stringify(messageObj) });
-                                }
-                            }
-                        });
-                    }
-                } catch (err) {
-                    console.error("Error retrieving group info:", err);
-                }
-            } else {
-                // Private chat: room id được tạo theo [userA, userB].sort().join("-")
-                const participants = currentRoom.split('-');
-                participants.forEach(user => {
-                    if (user !== client.username && users[user]) {
-                        if (!users[user].rooms || !users[user].rooms.has(currentRoom)) {
-                            users[user].emit("notification", { room: currentRoom, message: JSON.stringify(messageObj) });
-                        }
-                    }
-                });
-            }
-        } catch (err) {
-            console.error("Error saving message:", err);
+            // Cache tin nhắn cuối
+            lastMessageCache.set(msgData.room, {
+                message: newMessage,
+                timestamp: Date.now()
+            });
+
+            // Broadcast tin nhắn
+            io.to(msgData.room).emit('thread', JSON.stringify({
+                _id: newMessage._id,
+                name: newMessage.name,
+                message: newMessage.message,
+                room: newMessage.room,
+                createdAt: newMessage.createdAt,
+                ...(newMessage.replyTo && { replyTo: newMessage.replyTo })
+            }));
+
+            // Gửi thông báo cho những người không online
+            client.to(msgData.room).emit('notification', {
+                message: JSON.stringify(newMessage),
+                room: msgData.room
+            });
+
+        } catch (error) {
+            console.error('Error handling message:', error);
         }
     });
 
