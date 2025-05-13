@@ -8,7 +8,10 @@ const messageSchema = new mongoose.Schema({
     replyTo: {
         id: mongoose.Schema.Types.Mixed,  // Can be ObjectId or plain string/number
         name: String,
-        message: String
+        message: String,
+        fileUrl: String,       // Thêm trường này
+        fileName: String,      // Thêm trường này
+        fileType: String       // Thêm trường này
     },
 
     // Additional fields for file uploads
@@ -28,12 +31,12 @@ const messageSchema = new mongoose.Schema({
 });
 
 // Ensure we always populate these fields
-messageSchema.pre('find', function() {
-    this.select('name message room createdAt replyTo fileUrl fileType fileName');
+messageSchema.pre('find', function () {
+    this.select('name message room createdAt replyTo fileUrl fileType fileName fileSize');
 });
 
-messageSchema.pre('findOne', function() {
-    this.select('name message room createdAt replyTo fileUrl fileType fileName');
+messageSchema.pre('findOne', function () {
+    this.select('name message room createdAt replyTo fileUrl fileType fileName fileSize');
 });
 
 module.exports = mongoose.model('Message', messageSchema);

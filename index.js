@@ -154,12 +154,17 @@ io.on('connection', (client) => {
                 name: msgData.name,
                 message: msgData.message,
                 room: msgData.room,
+                fileUrl: msgData.fileUrl,
                 createdAt: msgData.createdAt || new Date(),
                 ...(msgData.replyTo && {
                     replyTo: {
                         id: msgData.replyTo.id,
                         name: msgData.replyTo.name,
-                        message: msgData.replyTo.message
+                        message: msgData.replyTo.message,
+                        //  các trường file khi reply
+                        fileUrl: msgData.replyTo.fileUrl,
+                        fileName: msgData.replyTo.fileName,
+                        fileType: msgData.replyTo.fileType
                     }
                 })
             });
@@ -178,8 +183,19 @@ io.on('connection', (client) => {
                 name: newMessage.name,
                 message: newMessage.message,
                 room: newMessage.room,
+                fileUrl: newMessage.fileUrl,
                 createdAt: newMessage.createdAt,
-                ...(newMessage.replyTo && { replyTo: newMessage.replyTo })
+                ...(newMessage.replyTo && {
+                    replyTo: {
+                        id: newMessage.replyTo.id,
+                        name: newMessage.replyTo.name,
+                        message: newMessage.replyTo.message,
+                        // Đảm bảo gửi cả thông tin file khi reply
+                        fileUrl: newMessage.replyTo.fileUrl,
+                        fileName: newMessage.replyTo.fileName,
+                        fileType: newMessage.replyTo.fileType
+                    }
+                })
             }));
 
             // Gửi thông báo cho những người không online
@@ -588,7 +604,18 @@ io.on('connection', (client) => {
                 return {
                     roomId: room,
                     friend: friend,
-                    messages: messages.reverse()
+                    messages: messages.reverse().map(msg => ({
+                        ...msg,
+                        // Đảm bảo replyTo có đủ thông tin file
+                        replyTo: msg.replyTo ? {
+                            id: msg.replyTo.id,
+                            name: msg.replyTo.name,
+                            message: msg.replyTo.message,
+                            fileUrl: msg.replyTo.fileUrl,
+                            fileName: msg.replyTo.fileName,
+                            fileType: msg.replyTo.fileType
+                        } : null
+                    }))
                 };
             }));
 
