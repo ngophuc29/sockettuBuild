@@ -26,7 +26,7 @@ const messageSchema = new mongoose.Schema({
     fileResourceType: {
         type: String,
         enum: ['image', 'video', 'raw'],
-        default: 'image'
+        
     }
 });
 

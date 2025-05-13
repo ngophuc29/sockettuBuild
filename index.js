@@ -155,6 +155,9 @@ io.on('connection', (client) => {
                 message: msgData.message,
                 room: msgData.room,
                 fileUrl: msgData.fileUrl,
+                fileType: msgData.fileType,     
+                fileName: msgData.fileName,     
+                fileSize: msgData.fileSize,     
                 createdAt: msgData.createdAt || new Date(),
                 ...(msgData.replyTo && {
                     replyTo: {
@@ -184,6 +187,9 @@ io.on('connection', (client) => {
                 message: newMessage.message,
                 room: newMessage.room,
                 fileUrl: newMessage.fileUrl,
+                fileType: newMessage.fileType,   
+                fileName: newMessage.fileName,   
+                fileSize: newMessage.fileSize,   
                 createdAt: newMessage.createdAt,
                 ...(newMessage.replyTo && {
                     replyTo: {
