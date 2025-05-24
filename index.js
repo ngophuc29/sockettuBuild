@@ -158,6 +158,7 @@ io.on('connection', (client) => {
                 });
             }
 
+
             client.emit("history", JSON.stringify(history));
 
             const reactions = await Reaction.find({ room: currentRoom })
@@ -193,6 +194,7 @@ io.on('connection', (client) => {
                         fileType: msgData.replyTo.fileType
                     }
                 })
+
             });
 
             await newMessage.save();
@@ -1002,6 +1004,7 @@ io.on('connection', (client) => {
             client.emit('moreMessages', { room, messages: [] });
         }
     });
+
 });
 
 connectDB();
