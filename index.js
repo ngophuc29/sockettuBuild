@@ -62,8 +62,8 @@ async function getLastMessageInRoom(roomId) {
                 _id: 0
             }
         )
-        .sort({ createdAt: -1 })
-        .lean();  // Sử dụng lean() để giảm overhead
+            .sort({ createdAt: -1 })
+            .lean();  // Sử dụng lean() để giảm overhead
 
         // 3. Cache kết quả với timestamp
         if (message) {
@@ -147,7 +147,7 @@ io.on('connection', (client) => {
 
     client.on("leave", (data) => {
         client.leave(data);
-    });    client.on("message", async (data) => {
+    }); client.on("message", async (data) => {
         try {
             const msgData = JSON.parse(data);
             const newMessage = new Message({
@@ -155,9 +155,9 @@ io.on('connection', (client) => {
                 message: msgData.message,
                 room: msgData.room,
                 fileUrl: msgData.fileUrl,
-                fileType: msgData.fileType,     
-                fileName: msgData.fileName,     
-                fileSize: msgData.fileSize,     
+                fileType: msgData.fileType,
+                fileName: msgData.fileName,
+                fileSize: msgData.fileSize,
                 createdAt: msgData.createdAt || new Date(),
                 ...(msgData.replyTo && {
                     replyTo: {
@@ -187,9 +187,9 @@ io.on('connection', (client) => {
                 message: newMessage.message,
                 room: newMessage.room,
                 fileUrl: newMessage.fileUrl,
-                fileType: newMessage.fileType,   
-                fileName: newMessage.fileName,   
-                fileSize: newMessage.fileSize,   
+                fileType: newMessage.fileType,
+                fileName: newMessage.fileName,
+                fileSize: newMessage.fileSize,
                 createdAt: newMessage.createdAt,
                 ...(newMessage.replyTo && {
                     replyTo: {
@@ -204,12 +204,26 @@ io.on('connection', (client) => {
                 })
             }));
 
-            // Gửi thông báo cho những người không online
-            client.to(msgData.room).emit('notification', {
-                message: JSON.stringify(newMessage),
-                room: msgData.room
+            // Gửi notification cho tất cả thành viên phòng (trừ người gửi)
+            let notifyUsers = [];
+            if (msgData.room.includes("_")) {
+                // Group chat: lấy danh sách thành viên group
+                const group = await GroupChat.findOne({ roomId: msgData.room });
+                if (group) {
+                    notifyUsers = group.members.filter(u => u !== msgData.name);
+                }
+            } else {
+                // Private chat: room dạng "userA-userB"
+                notifyUsers = msgData.room.split("-").filter(u => u !== msgData.name);
+            }
+            notifyUsers.forEach(username => {
+                if (users[username]) {
+                    users[username].emit('notification', {
+                        message: JSON.stringify(newMessage),
+                        room: msgData.room
+                    });
+                }
             });
-
         } catch (error) {
             console.error('Error handling message:', error);
         }
@@ -225,7 +239,7 @@ io.on('connection', (client) => {
             });
         }
     });
-    
+
 
     client.on("deleteMessage", async (data) => {
         try {
@@ -577,7 +591,7 @@ io.on('connection', (client) => {
                     .sort({ createdAt: -1 })
                     .limit(8)
                     .lean();  // Dùng lean() để tối ưu memory
-                    
+
                 groupChats.push({
                     roomId: group.roomId,
                     groupName: group.groupName,
@@ -589,7 +603,7 @@ io.on('connection', (client) => {
             }
 
             // --- Lấy danh sách private chat ---
-            const roomIds = await Message.distinct("room", { 
+            const roomIds = await Message.distinct("room", {
                 room: { $not: /_/ },
                 $or: [
                     { name: username },
@@ -606,7 +620,7 @@ io.on('connection', (client) => {
 
                 const participants = room.split("-");
                 const friend = participants.find(name => name !== username) || username;
-                
+
                 return {
                     roomId: room,
                     friend: friend,
