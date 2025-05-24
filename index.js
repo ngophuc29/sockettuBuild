@@ -128,12 +128,36 @@ io.on('connection', (client) => {
         const currentRoom = data;
         client.join(currentRoom);
         try {
-            // Sửa lại limit(8) và sort(-1) để lấy 8 tin nhắn mới nhất
-            const history = await Message.find({ room: currentRoom })
+            // Lấy 20 tin nhắn mới nhất
+            let history = await Message.find({ room: currentRoom })
                 .sort({ createdAt: -1 })
-                .limit(8)
-                // Reverse lại để hiển thị theo thứ tự cũ -> mới
-                .then(messages => messages.reverse());
+                .limit(20)
+                .lean();
+
+            history = history.reverse();
+
+            // Lấy các id tin nhắn gốc cần thiết (nếu có reply)
+            const replyIds = history
+                .map(m => m.replyTo?.id)
+                .filter(id => id && !history.some(msg => (msg._id?.toString() === id || msg.id?.toString() === id)));
+
+            if (replyIds.length > 0) {
+                const repliedMessages = await Message.find({ _id: { $in: replyIds } }).lean();
+                // Gán nội dung gốc vào replyTo của từng message
+                history = history.map(m => {
+                    if (m.replyTo?.id) {
+                        const found = repliedMessages.find(rm => rm._id.toString() === m.replyTo.id);
+                        if (found) {
+                            m.replyTo.message = found.message;
+                            m.replyTo.fileUrl = found.fileUrl;
+                            m.replyTo.fileName = found.fileName;
+                            m.replyTo.fileType = found.fileType;
+                        }
+                    }
+                    return m;
+                });
+            }
+
 
             client.emit("history", JSON.stringify(history));
 
@@ -170,6 +194,7 @@ io.on('connection', (client) => {
                         fileType: msgData.replyTo.fileType
                     }
                 })
+
             });
 
             await newMessage.save();
@@ -934,6 +959,52 @@ io.on('connection', (client) => {
         delete usersInCall[to];
         delete usersInCall[client.username];
     });
+
+    client.on('loadMoreMessages', async ({ room, before }) => {
+        try {
+            let query = {
+                room,
+                createdAt: { $lt: new Date(before) }
+            };
+
+            let messages = await Message.find(query)
+                .sort({ createdAt: -1 })
+                .limit(12)
+                .lean();
+
+            messages = messages.reverse();
+
+            // Lấy các id tin nhắn gốc cần thiết (nếu có reply)
+            const replyIds = messages
+                .map(m => m.replyTo?.id)
+                .filter(id => id && !messages.some(msg => (msg._id?.toString() === id || msg.id?.toString() === id)));
+
+            if (replyIds.length > 0) {
+                const repliedMessages = await Message.find({ _id: { $in: replyIds } }).lean();
+                // Gán nội dung gốc vào replyTo của từng message
+                messages = messages.map(m => {
+                    if (m.replyTo?.id) {
+                        const found = repliedMessages.find(rm => rm._id.toString() === m.replyTo.id);
+                        if (found) {
+                            m.replyTo.message = found.message;
+                            m.replyTo.fileUrl = found.fileUrl;
+                            m.replyTo.fileName = found.fileName;
+                            m.replyTo.fileType = found.fileType;
+                        }
+                    }
+                    return m;
+                });
+            }
+
+            client.emit('moreMessages', {
+                room,
+                messages // chỉ trả về messages, không trả về repliedMessages
+            });
+        } catch (err) {
+            client.emit('moreMessages', { room, messages: [] });
+        }
+    });
+
 });
 
 connectDB();
