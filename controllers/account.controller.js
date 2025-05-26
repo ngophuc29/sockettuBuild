@@ -18,6 +18,8 @@ const registerUserStep1 = async (req, res) => {
         const userExists = await User.findOne({ email });
         if (userExists) {
             return res.status(400).json({ message: 'Email đã được đăng ký' });
+
+            
         }
 
         // Sử dụng email-existence để kiểm tra email có tồn tại thực sự

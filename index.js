@@ -381,9 +381,11 @@ io.on('connection', (client) => {
 
             if (users[myUsername]) {
                 users[myUsername].emit('friendsListUpdated', listA);
+                users[myUsername].emit('friendRemoved', { from: myUsername, to: friendUsername }); // Thêm dòng này
             }
             if (users[friendUsername]) {
                 users[friendUsername].emit('friendsListUpdated', listB);
+                users[friendUsername].emit('friendRemoved', { from: myUsername, to: friendUsername }); // Thêm dòng này
             }
         } catch (err) {
             console.error("[cancelFriend] Lỗi khi hủy kết bạn:", err);
@@ -479,19 +481,12 @@ io.on('connection', (client) => {
                 });
                 return;
             }
-            io.emit('friendRequestWithdrawn', { from: myUsername, to: friendUsername });
-            client.emit('withdrawFriendRequestResult', {
-                success: true,
-                message: `Đã thu hồi lời mời kết bạn gửi đến ${friendUsername}`
-            });
-
-            // Nếu người nhận đang online
+            // Emit cho cả hai phía để đồng bộ UI
+            if (users[myUsername]) {
+                users[myUsername].emit('friendRequestWithdrawn', { from: myUsername, to: friendUsername });
+            }
             if (users[friendUsername]) {
-                // Gửi thông báo rằng lời mời đã bị thu hồi
-                users[friendUsername].emit("friendRequestWithdrawn", {
-                    from: myUsername
-                });
-
+                users[friendUsername].emit('friendRequestWithdrawn', { from: myUsername, to: friendUsername });
                 // Gửi lại danh sách lời mời mới
                 const updatedRequests = await FriendRequest.find({
                     to: friendUsername,
@@ -499,7 +494,11 @@ io.on('connection', (client) => {
                 });
                 users[friendUsername].emit('friendRequests', updatedRequests);
             }
-
+            io.emit('friendRequestWithdrawn', { from: myUsername, to: friendUsername });
+            client.emit('withdrawFriendRequestResult', {
+                success: true,
+                message: `Đã thu hồi lời mời kết bạn gửi đến ${friendUsername}`
+            });
         } catch (err) {
             console.error("[withdrawFriendRequest] Lỗi thu hồi lời mời:", err);
             client.emit('withdrawFriendRequestResult', {
