@@ -955,6 +955,10 @@ io.on('connection', (client) => {
         if (peerSocket) {
             peerSocket.emit("callEnded");
         }
+        // Đảm bảo cả 2 phía đều nhận callEnded
+        if (users[client.username] && users[client.username] !== peerSocket) {
+            users[client.username].emit("callEnded");
+        }
         delete usersInCall[to];
         delete usersInCall[client.username];
     });
