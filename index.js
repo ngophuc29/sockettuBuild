@@ -171,9 +171,13 @@ io.on('connection', (client) => {
 
     client.on("leave", (data) => {
         client.leave(data);
-    }); client.on("message", async (data) => {
+    });
+    client.on("message", async (data) => {
         try {
-            const msgData = JSON.parse(data);
+            let msgData = data;
+            if (typeof data === "string") {
+                msgData = JSON.parse(data);
+            }
             const newMessage = new Message({
                 name: msgData.name,
                 message: msgData.message,
