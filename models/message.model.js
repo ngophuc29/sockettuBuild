@@ -40,11 +40,11 @@ const messageSchema = new mongoose.Schema({
 
 // Ensure we always populate these fields
 messageSchema.pre('find', function () {
-    this.select('name message room createdAt replyTo fileUrl fileType fileName fileSize');
+    // this.select('name message room createdAt replyTo fileUrl fileType fileName fileSize');
 });
 
 messageSchema.pre('findOne', function () {
-    this.select('name message room createdAt replyTo fileUrl fileType fileName fileSize');
+    // this.select('name message room createdAt replyTo fileUrl fileType fileName fileSize');
 });
 
 module.exports = mongoose.model('Message', messageSchema);
