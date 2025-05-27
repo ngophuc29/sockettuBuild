@@ -1026,6 +1026,18 @@ io.on('connection', (client) => {
         }
     });
 
+    // Server: Lấy toàn bộ file/ảnh/video của room (không phân trang)
+    client.on('getAllFilesInRoom', async (roomId) => {
+        try {
+            const allFiles = await Message.find({
+                room: roomId,
+                fileUrl: { $exists: true, $ne: null }
+            }).sort({ createdAt: 1 }).lean();
+            client.emit('allFilesInRoom', allFiles);
+        } catch (err) {
+            client.emit('allFilesInRoom', []);
+        }
+    });
 });
 
 connectDB();
