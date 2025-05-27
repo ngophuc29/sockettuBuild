@@ -275,12 +275,21 @@ const updateUserProfile = async (req, res) => {
         if (birthday) user.birthday = birthday;
 
         if (image) {
-            const buffer = Buffer.from(image.split(',')[1], 'base64');
-            const outputBuffer = await sharp(buffer)
-                .resize({ width: 100 })
-                .jpeg({ quality: 10 })
-                .toBuffer();
-            user.image = `data:image/jpeg;base64,${outputBuffer.toString('base64')}`;
+            if (image.startsWith('http')) {
+                // Nếu là URL thì lưu trực tiếp
+                user.image = image;
+            } else if (image.startsWith('data:image/')) {
+                // Nếu là base64 có tiền tố thì lưu trực tiếp
+                user.image = image;
+            } else {
+                // Nếu là base64 thuần thì nén lại
+                const buffer = Buffer.from(image, 'base64');
+                const outputBuffer = await sharp(buffer)
+                    .resize({ width: 100 })
+                    .jpeg({ quality: 10 })
+                    .toBuffer();
+                user.image = `data:image/jpeg;base64,${outputBuffer.toString('base64')}`;
+            }
         }
 
         await user.save();
