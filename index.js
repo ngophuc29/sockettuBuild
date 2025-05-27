@@ -224,6 +224,12 @@ io.on('connection', (client) => {
                 fileName: newMessage.fileName,
                 fileSize: newMessage.fileSize,
                 createdAt: newMessage.createdAt,
+                type: newMessage.type,
+                callType: newMessage.callType,
+                duration: newMessage.duration,
+                caller: newMessage.caller,
+                callee: newMessage.callee,
+                status: newMessage.status,
                 ...(newMessage.replyTo && {
                     replyTo: {
                         id: newMessage.replyTo.id,
