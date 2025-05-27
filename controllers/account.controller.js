@@ -19,21 +19,38 @@ const registerUserStep1 = async (req, res) => {
         if (userExists) {
             return res.status(400).json({ message: 'Email đã được đăng ký' });
 
-            
+
         }
 
-        // Sử dụng email-existence để kiểm tra email có tồn tại thực sự
-        emailExistence.check(email, async (err, exists) => {
-            if (err) {
-                console.error('Lỗi khi kiểm tra email:', err);
-                return res.status(500).json({ message: 'Lỗi khi kiểm tra email', error: err.message });
-            }
+        // // Sử dụng email-existence để kiểm tra email có tồn tại thực sự
+        // emailExistence.check(email, async (err, exists) => {
+        //     if (err) {
+        //         console.error('Lỗi khi kiểm tra email:', err);
+        //         return res.status(500).json({ message: 'Lỗi khi kiểm tra email', error: err.message });
+        //     }
 
-            if (!exists) {
-                return res.status(400).json({ message: 'Email không tồn tại trên hệ thống thực tế' });
-            }
+        //     if (!exists) {
+        //         return res.status(400).json({ message: 'Email không tồn tại trên hệ thống thực tế' });
+        //     }
 
-            // Nếu email tồn tại, tiến hành gửi OTP
+        //     // Nếu email tồn tại, tiến hành gửi OTP
+        //     const otp = generateOTP();
+
+        //     try {
+        //         await sendEmail(email, 'Xác nhận đăng ký', `Mã OTP của bạn là: ${otp}`);
+        //     } catch (error) {
+        //         return res.status(400).json({
+        //             message: 'Không gửi được email. Có thể email không tồn tại hoặc bị lỗi.',
+        //             error: error.message
+        //         });
+        //     }
+
+        //     await OTP.create({ email, otp, expiration: Date.now() + 10 * 60 * 1000 });
+        //     return res.status(200).json({ message: 'Đã gửi OTP tới email' });
+        // });
+
+
+        //     // Nếu email tồn tại, tiến hành gửi OTP
             const otp = generateOTP();
 
             try {
@@ -47,7 +64,6 @@ const registerUserStep1 = async (req, res) => {
 
             await OTP.create({ email, otp, expiration: Date.now() + 10 * 60 * 1000 });
             return res.status(200).json({ message: 'Đã gửi OTP tới email' });
-        });
     } catch (error) {
         return res.status(500).json({ message: 'Lỗi server', error: error.message });
     }
@@ -341,12 +357,12 @@ const checkUsername = async (req, res) => {
 
 const checkPhone = async (req, res) => {
     const { phone } = req.query;
-    if (!phone ) {
+    if (!phone) {
         return res.status(400).json({ message: 'Vui lòng cung cấp phone ' });
     }
 
     try {
-        const user = await User.findOne({ phone  });
+        const user = await User.findOne({ phone });
         if (user) {
             return res.status(200).json({ exists: true, message: 'phone  đã được đăng ký' });
         } else {
