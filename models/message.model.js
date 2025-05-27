@@ -27,7 +27,15 @@ const messageSchema = new mongoose.Schema({
         type: String,
         enum: ['image', 'video', 'raw'],
         
-    }
+    },
+
+    // Thêm các trường cho cuộc gọi
+    type: { type: String }, // 'call' nếu là message cuộc gọi
+    callType: { type: String }, // 'audio' | 'video'
+    duration: { type: Number },
+    caller: { type: String },
+    callee: { type: String },
+    status: { type: String }, // 'ended' | 'missed'
 });
 
 // Ensure we always populate these fields

@@ -193,8 +193,16 @@ io.on('connection', (client) => {
                         fileName: msgData.replyTo.fileName,
                         fileType: msgData.replyTo.fileType
                     }
+                }),
+                // Thêm các trường cho message kiểu call
+                ...(msgData.type === 'call' && {
+                    type: msgData.type,
+                    callType: msgData.callType,
+                    duration: msgData.duration,
+                    caller: msgData.caller,
+                    callee: msgData.callee,
+                    status: msgData.status
                 })
-
             });
 
             await newMessage.save();
