@@ -920,6 +920,8 @@ io.on('connection', (client) => {
             });
             io.to(data.roomId).emit("groupDisbanded", { roomId: data.roomId, message: disbandMessage });
             await GroupChat.deleteOne({ roomId: data.roomId });
+            // Xóa toàn bộ tin nhắn của room này
+            await Message.deleteMany({ room: data.roomId });
             client.emit("groupManagementResult", { success: true, message: "Group disbanded" });
         } catch (err) {
             console.error("Error in disbandGroup:", err);
