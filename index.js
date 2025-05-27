@@ -1032,7 +1032,7 @@ io.on('connection', (client) => {
             const allFiles = await Message.find({
                 room: roomId,
                 fileUrl: { $exists: true, $ne: null }
-            }).sort({ createdAt: 1 }).lean();
+            }).sort({ createdAt: -1 }).lean();
             client.emit('allFilesInRoom', allFiles);
         } catch (err) {
             client.emit('allFilesInRoom', []);
